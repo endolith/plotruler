@@ -86,6 +86,16 @@ class OverlayWindow(QWidget):
         self._maximized = False
         self._saved_geometry = None
 
+        # Readout state: the last hovered cursor position (local logical),
+        # and a transient "copied" banner that fades after a short delay.
+        self._hover_pos = QPoint()
+        self._hover_active = False
+        self._copy_notice = ""
+        self._copy_timer = QTimer(self)
+        self._copy_timer.setSingleShot(True)
+        self._copy_timer.setInterval(900)
+        self._copy_timer.timeout.connect(self._clear_copy_notice)
+
         # Swap Qt's WS_POPUP for real overlapped-window styles so Windows
         # treats this as a normal window: snapping, drag-to-edge, and the
         # taskbar all work. The frame is hidden by WM_NCCALCSIZE. Must
@@ -169,6 +179,8 @@ class OverlayWindow(QWidget):
         self._value_text = ""
         self._value_error = None
         self._caret_visible = True
+        self._copy_notice = ""
+        self._hover_active = False
         if not self._blink_timer.isActive():
             self._blink_timer.start()
         self.activateWindow()
@@ -253,15 +265,21 @@ class OverlayWindow(QWidget):
         self._value_text = ""
         self._value_error = None
         self._session.record_value(value)
-        self._calibration = self._session.calibration()
+        calibration = self._session.calibration()
+        if calibration is not None:
+            # Calibration is complete: switch to readout mode. The session
+            # was only a scaffold for collecting anchors; once we have a
+            # Calibration we no longer need it, and keeping it would
+            # suppress the hover readout.
+            self._calibration = calibration
+            self._session = None
+            self._blink_timer.stop()
         self.update()
 
     def mousePressEvent(self, event):
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self._session is not None
-            and self._session.expecting_click
-        ):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+        if self._session is not None and self._session.expecting_click:
             # Calibration clicks land on the graph beneath the overlay;
             # make sure this window keeps focus so the typed value is
             # captured here rather than by the underlying app.
@@ -271,7 +289,33 @@ class OverlayWindow(QWidget):
             self.update()
             event.accept()
             return
+        if self._calibration is not None:
+            # Calibration is done: a click copies the hovered readout.
+            self._copy_readout()
+            event.accept()
+            return
         super().mousePressEvent(event)
+
+    def _copy_readout(self):
+        """Copy the readout at the cursor as (X, Y) to the clipboard."""
+        if not self._hover_active:
+            return
+        try:
+            px, py = self._physical_from_local(self._hover_pos)
+            vx, vy = self._calibration.xy(px, py)
+        except ValueError, ZeroDivisionError:
+            return
+        x_str = self._calibration.x.format(vx)
+        y_str = self._calibration.y.format(vy)
+        text = f"({x_str}, {y_str})"
+        QApplication.clipboard().setText(text)
+        self._copy_notice = "Copied " + text
+        self._copy_timer.start()
+        self.update()
+
+    def _clear_copy_notice(self):
+        self._copy_notice = ""
+        self.update()
 
     def _record_click(self, event):
         """Store the clicked point in physical screen pixels."""
@@ -284,6 +328,12 @@ class OverlayWindow(QWidget):
         dpr = self.devicePixelRatioF()
         logical = QPoint(int(px / dpr), int(py / dpr))
         return self.mapFromGlobal(logical)
+
+    def _physical_from_local(self, local):
+        """Map a local logical point to physical screen pixels."""
+        dpr = self.devicePixelRatioF()
+        global_ = self.mapToGlobal(local)
+        return int(global_.x() * dpr), int(global_.y() * dpr)
 
     def hit_test_code(self, local):
         """Classify a local point for Win32 hit testing.
@@ -330,7 +380,21 @@ class OverlayWindow(QWidget):
         if DEBUG and event.buttons():
             pos = event.position().toPoint()
             _dbg(f"mouseMove (dragging) at {pos.x()},{pos.y()}")
+        # Track the cursor for the hover readout whenever we have a
+        # calibration; only repaint when the position actually changes so
+        # the crosshair does not shimmer on every mouse move.
+        old = self._hover_pos
+        self._hover_pos = event.position().toPoint()
+        self._hover_active = self._calibration is not None
+        if self._hover_active and self._hover_pos != old:
+            self.update()
         super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        if self._hover_active:
+            self._hover_active = False
+            self.update()
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event):
         pos = event.position().toPoint()
@@ -377,6 +441,8 @@ class OverlayWindow(QWidget):
         # and grab it to resize, on light and dark backgrounds alike.
         painter.setPen(QPen(QColor(255, 90, 90, 240), 2))
         painter.drawRect(self.rect().adjusted(1, 1, -2, -2))
+        if self._calibration is not None:
+            self._paint_readout(painter)
         if self._session is not None:
             self._paint_calibration(painter)
 
@@ -527,6 +593,53 @@ class OverlayWindow(QWidget):
             painter.drawLine(
                 QPointF(caret_x, baseline - 7),
                 QPointF(caret_x, baseline + 7),
+            )
+
+    def _paint_readout(self, painter):
+        """Draw the crosshair and (X, Y) readout at the hover position.
+
+        The crosshair and readout only appear once a calibration exists.
+        The values come from the mouse's physical screen position, so the
+        readout is independent of where the overlay sits.
+        """
+        if not self._hover_active or self._session is not None:
+            return
+        px, py = self._physical_from_local(self._hover_pos)
+        try:
+            vx, vy = self._calibration.xy(px, py)
+        except ValueError, ZeroDivisionError:
+            return
+        x_text = self._calibration.x.format(vx)
+        y_text = self._calibration.y.format(vy)
+
+        # Crosshair: thin translucent lines through the cursor, snapped to
+        # the graph pixel so the readout lines up with it.
+        x = self._hover_pos.x()
+        y = self._hover_pos.y()
+        line_color = QColor(255, 255, 255, 60)
+        painter.setPen(QPen(line_color, 1))
+        painter.drawLine(QPoint(0, y), QPoint(self.width(), y))
+        painter.drawLine(QPoint(x, TITLEBAR_HEIGHT), QPoint(x, self.height()))
+
+        # Readout text near the cursor, offset below-right so it does not
+        # cover the point being read.
+        readout = f"({x_text}, {y_text})"
+        self._draw_outlined_text(
+            painter,
+            readout,
+            QPointF(x + 14, y + 14),
+            QColor(255, 255, 255),
+            11,
+            bold=True,
+        )
+        if self._copy_notice:
+            self._draw_outlined_text(
+                painter,
+                self._copy_notice,
+                QPointF(x + 14, y + 34),
+                QColor(140, 230, 150),
+                9,
+                bold=False,
             )
 
     def resizeEvent(self, event):
