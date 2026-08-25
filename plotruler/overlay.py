@@ -18,8 +18,14 @@ Set PLOTRULER_DEBUG=1 to log window state and native events to stderr.
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QPainter,
+    QPen,
+)
 from PySide6.QtWidgets import QApplication, QWidget
 
 from . import win_hittest
@@ -377,7 +383,7 @@ class OverlayWindow(QWidget):
     def _paint_calibration(self, painter):
         self._paint_axis_lines(painter)
         self._paint_anchors(painter)
-        self._paint_instruction_box(painter)
+        self._paint_instruction(painter)
 
     def _paint_axis_lines(self, painter):
         """Draw a guide between the two anchors of each axis once both
@@ -406,102 +412,121 @@ class OverlayWindow(QWidget):
             painter.setBrush(QColor(255, 255, 255, 220))
             painter.drawEllipse(local, 3, 3)
             if value is not None:
-                self._draw_anchor_label(painter, local, value, color)
+                self._draw_anchor_label(painter, local, color, str(value))
 
-    def _draw_anchor_label(self, painter, local, value, color):
-        """Paint a value beside its anchor on a light chip for legibility."""
+    def _draw_anchor_label(self, painter, local, color, text):
+        """Draw an anchor's value beside its marker, translucent with a
+        dark halo so it reads over whatever graph is beneath."""
         font = QFont()
         font.setPointSize(9)
         font.setBold(True)
         painter.setFont(font)
-        text = str(value)
-        metrics = QFontMetricsF(font)
-        box = QRectF(
-            local.x() + 10,
-            local.y() - metrics.height() / 2 - 2,
-            metrics.horizontalAdvance(text) + 8,
-            metrics.height() + 4,
+        self._draw_outlined_text(
+            painter,
+            text,
+            QPointF(local.x() + 10, local.y()),
+            color,
+            9,
+            bold=True,
         )
-        painter.fillRect(box, QColor(255, 255, 255, 255))
-        painter.setPen(QColor(20, 20, 20))
-        painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
-    def _paint_instruction_box(self, painter):
-        """Paint the prompt box at the bottom of the window.
+    def _draw_outlined_text(self, painter, text, pos, color, size, bold):
+        """Draw translucent text with a dark outline so it stays legible
+        over any background without an opaque backing box.
 
-        The box is fully opaque (alpha 255) even though the rest of the
-        window is translucent. A semi-transparent box reads as white-on-
-        gray whenever bright graph content shows through, which made the
-        prompt unreadable; opaque dark with white text guarantees
-        contrast over any background.
+        The graph shows through the semi-transparent glyphs, but the dark
+        halo keeps the text readable on light or dark content.
         """
-        box = QRectF(20, self.height() - 92, self.width() - 40, 72)
-        painter.fillRect(box, QColor(18, 18, 18, 255))
-        painter.setPen(QPen(QColor(255, 255, 255, 70), 1))
-        painter.drawRoundedRect(box, 8, 8)
-
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         font = QFont()
-        font.setPointSize(11)
-        font.setBold(True)
+        font.setPointSize(size)
+        font.setBold(bold)
         painter.setFont(font)
+        metrics = QFontMetricsF(font)
+        height = metrics.height()
+        baseline = pos.y() + height / 2
+        # Dark halo: draw the text a few times offset by a pixel, then the
+        # colored glyph on top. This reads as an outline, not a box.
+        halo_color = QColor(10, 10, 10, 200)
+        painter.setPen(halo_color)
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            painter.drawText(QPointF(pos.x() + dx, baseline + dy), text)
+        painter.setPen(color)
+        painter.drawText(QPointF(pos.x(), baseline), text)
+        painter.restore()
+
+    def _paint_instruction(self, painter):
+        """Draw the calibration prompt and hints as floating translucent
+        text at the bottom of the window, with no backing box."""
+        left = _EDGE + 8
+        width = self.width() - left * 2
+        top = self.height() - 96
+        prompt = self._session.prompt()
+        line = 0
         if self._session.active:
             title_color = QColor(255, 255, 255)
         else:
-            title_color = QColor(120, 230, 140)
-        painter.setPen(title_color)
-        painter.drawText(
-            QRectF(box.x() + 8, box.y() + 4, box.width() - 16, 16),
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._session.prompt(),
+            title_color = QColor(140, 230, 150)
+        self._draw_outlined_text(
+            painter,
+            prompt,
+            QPointF(left, top + line * 20),
+            title_color,
+            11,
+            bold=True,
         )
-
+        line += 1
         if self._session.expecting_value:
-            self._draw_value_input(painter, box)
+            self._draw_value_input(painter, left, top + line * 20, width)
+            line += 1
         if self._value_error:
-            small = QFont()
-            small.setPointSize(8)
-            painter.setFont(small)
-            painter.setPen(QColor(255, 120, 120))
-            painter.drawText(
-                QRectF(box.x() + 8, box.y() + 42, box.width() - 16, 14),
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            self._draw_outlined_text(
+                painter,
                 self._value_error,
+                QPointF(left, top + line * 20),
+                QColor(255, 130, 130),
+                9,
+                bold=False,
             )
-
-        hint = QFont()
-        hint.setPointSize(9)
-        painter.setFont(hint)
-        painter.setPen(QColor(200, 200, 200))
-        if self._session.active:
-            hint_text = "Ctrl+Z undo  ·  Esc cancel"
-        else:
-            hint_text = "Ctrl+N redo  ·  Esc hide"
-        painter.drawText(
-            QRectF(box.x() + 8, box.y() + 56, box.width() - 16, 12),
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            line += 1
+        # Hint row, right-aligned.
+        hint_text = (
+            "Ctrl+Z undo  ·  Esc cancel"
+            if self._session.active
+            else "Ctrl+N redo  ·  Esc hide"
+        )
+        self._draw_outlined_text(
+            painter,
             hint_text,
+            QPointF(left + width - 220, top + line * 20),
+            QColor(210, 210, 210),
+            9,
+            bold=False,
         )
 
-    def _draw_value_input(self, painter, box):
-        """Paint the typed value and a blinking caret on the input line."""
-        font = QFont()
-        font.setPointSize(11)
-        font.setBold(True)
-        painter.setFont(font)
-        metrics = QFontMetricsF(font)
-        line = QRectF(box.x() + 8, box.y() + 22, box.width() - 16, 20)
-        text = self._value_text or " "
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(
-            line,
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            text,
+    def _draw_value_input(self, painter, left, top, width):
+        """Draw the typed value and a blinking caret on the input line."""
+        self._draw_outlined_text(
+            painter,
+            self._value_text or " ",
+            QPointF(left, top),
+            QColor(255, 255, 255),
+            11,
+            bold=True,
         )
         if self._caret_visible:
-            caret_x = line.x() + metrics.horizontalAdvance(text) + 1
-            cy = line.center().y()
+            font = QFont()
+            font.setPointSize(11)
+            font.setBold(True)
+            painter.setFont(font)
+            metrics = QFontMetricsF(font)
+            caret_x = left + metrics.horizontalAdvance(self._value_text) + 2
+            baseline = top + metrics.height() / 2
+            painter.setPen(QPen(QColor(255, 255, 255, 220), 2))
             painter.drawLine(
-                QPointF(caret_x, cy - 7), QPointF(caret_x, cy + 7)
+                QPointF(caret_x, baseline - 7),
+                QPointF(caret_x, baseline + 7),
             )
 
     def resizeEvent(self, event):
