@@ -8,7 +8,7 @@ matching resize cursor, and manual geometry updates while dragging.
 from PySide6.QtCore import QRect, Qt
 
 # How thick the invisible edge hit zones are, in pixels.
-_EDGE = 6
+_EDGE = 8
 # Minimum window size, in pixels.
 _MIN_W = 320
 _MIN_H = 200
