@@ -123,3 +123,28 @@ def test_anchors_report_values_only_after_typing():
     assert session.anchors() == [("x", 0, 100, 50, None)]
     session.record_value(3.0)
     assert session.anchors() == [("x", 0, 100, 50, 3.0)]
+
+
+def test_expecting_flags_track_the_step_kind():
+    """expecting_click must be true before a click and false after it,
+    expecting_value the mirror image, so the overlay knows whether to
+    capture a point or typed text."""
+    session = CalibrationSession()
+    assert session.expecting_click and not session.expecting_value
+    session.record_point(100, 50)
+    assert not session.expecting_click and session.expecting_value
+    session.record_value(3.0)
+    assert session.expecting_click and not session.expecting_value
+
+
+def test_flags_are_false_when_done():
+    """Both expecting flags must be false once the calibration is complete,
+    so the overlay stops capturing input."""
+    session = CalibrationSession()
+    while session.active:
+        if session.expecting_click:
+            session.record_point(100, 100)
+        else:
+            session.record_value(1.0)
+    assert not session.expecting_click
+    assert not session.expecting_value

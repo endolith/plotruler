@@ -18,15 +18,24 @@ Set PLOTRULER_DEBUG=1 to log window state and native events to stderr.
 import os
 import sys
 
-from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
 from . import win_hittest
+from .core import CalibrationSession
 from .titlebar import TITLEBAR_HEIGHT, TitleBar
 
 # Width of the invisible edge hit-zones, in logical pixels.
 _EDGE = 8
+
+# Anchor marker colors: X on one hue, Y on another, both chosen to read
+# against dark and light graph content.
+_X_COLOR = QColor(80, 200, 255)
+_Y_COLOR = QColor(255, 200, 80)
+
+# Characters allowed while typing a calibration value.
+_VALID_CHARS = set("0123456789.-+eE")
 
 DEBUG = bool(os.environ.get("PLOTRULER_DEBUG"))
 
@@ -50,9 +59,21 @@ class OverlayWindow(QWidget):
         self.setMinimumSize(320, 200)
         self.resize(900, 600)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.title_bar = TitleBar(self)
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
+
+        # Calibration state. A session exists only while the user is
+        # (or has just finished) clicking anchors and typing values.
+        self._session = None
+        self._calibration = None
+        self._value_text = ""
+        self._value_error = None
+        self._caret_visible = True
+        self._blink_timer = QTimer(self)
+        self._blink_timer.setInterval(530)
+        self._blink_timer.timeout.connect(self._blink)
 
         # Tracks the manual maximize state; the window itself stays in a
         # normal window state so nothing conflicts with native snapping.
@@ -135,6 +156,129 @@ class OverlayWindow(QWidget):
     def close_app(self):
         QApplication.quit()
 
+    def start_calibration(self):
+        """Begin a fresh click-and-type calibration, or restart one."""
+        self._session = CalibrationSession()
+        self._calibration = None
+        self._value_text = ""
+        self._value_error = None
+        self._caret_visible = True
+        if not self._blink_timer.isActive():
+            self._blink_timer.start()
+        self.activateWindow()
+        self.setFocus()
+        self.update()
+
+    def cancel_calibration(self):
+        """Abandon the calibration in progress and drop all anchors."""
+        self._session = None
+        self._value_text = ""
+        self._value_error = None
+        self._blink_timer.stop()
+        self.update()
+
+    def _blink(self):
+        """Toggle the input caret; repaint only while a value is expected."""
+        self._caret_visible = not self._caret_visible
+        if self._session is not None and self._session.expecting_value:
+            self.update()
+
+    def keyPressEvent(self, event):
+        if (
+            event.key() == Qt.Key.Key_N
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            self.start_calibration()
+            event.accept()
+            return
+        if self._session is not None and self._session.active:
+            self._session_key(event)
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Escape:
+            self.minimize_to_tray()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _session_key(self, event):
+        """Route a key press during calibration."""
+        if event.key() == Qt.Key.Key_Escape:
+            self.cancel_calibration()
+            return
+        if (
+            event.key() == Qt.Key.Key_Z
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            # Undo un-submitted text first, then a whole step.
+            if self._session.expecting_value and self._value_text:
+                self._value_text = ""
+            else:
+                self._session.undo()
+                self._value_error = None
+            self.update()
+            return
+        if event.key() == Qt.Key.Key_Backspace:
+            if self._session.expecting_value and self._value_text:
+                self._value_text = self._value_text[:-1]
+                self._value_error = None
+                self.update()
+            return
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self._session.expecting_value:
+                self._submit_value()
+            return
+        if self._session.expecting_value:
+            text = event.text()
+            if text and all(c in _VALID_CHARS for c in text):
+                if len(self._value_text) < 24:
+                    self._value_text += text
+                    self._value_error = None
+                    self.update()
+
+    def _submit_value(self):
+        """Commit the typed value to the current anchor point."""
+        try:
+            value = float(self._value_text)
+        except ValueError:
+            self._value_error = "That is not a number"
+            self.update()
+            return
+        self._value_text = ""
+        self._value_error = None
+        self._session.record_value(value)
+        self._calibration = self._session.calibration()
+        self.update()
+
+    def mousePressEvent(self, event):
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._session is not None
+            and self._session.expecting_click
+        ):
+            # Calibration clicks land on the graph beneath the overlay;
+            # make sure this window keeps focus so the typed value is
+            # captured here rather than by the underlying app.
+            self.activateWindow()
+            self.setFocus()
+            self._record_click(event)
+            self.update()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def _record_click(self, event):
+        """Store the clicked point in physical screen pixels."""
+        pos = event.globalPosition()
+        dpr = self.devicePixelRatioF()
+        self._session.record_point(int(pos.x() * dpr), int(pos.y() * dpr))
+
+    def _local_from_physical(self, px, py):
+        """Map a physical screen point back to local logical coordinates."""
+        dpr = self.devicePixelRatioF()
+        logical = QPoint(int(px / dpr), int(py / dpr))
+        return self.mapFromGlobal(logical)
+
     def hit_test_code(self, local):
         """Classify a local point for Win32 hit testing.
 
@@ -175,11 +319,6 @@ class OverlayWindow(QWidget):
             msg = win_hittest.wintypes.MSG.from_address(int(message))
             _dbg(f"nativeEvent msg=0x{msg.message:04x} handled={result[1]}")
         return result
-
-    def mousePressEvent(self, event):
-        pos = event.position().toPoint()
-        _dbg(f"mousePress at {pos.x()},{pos.y()}")
-        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if DEBUG and event.buttons():
@@ -227,6 +366,131 @@ class OverlayWindow(QWidget):
         # and grab it to resize, on light and dark backgrounds alike.
         painter.setPen(QPen(QColor(255, 90, 90, 240), 2))
         painter.drawRect(self.rect().adjusted(1, 1, -2, -2))
+        if self._session is not None:
+            self._paint_calibration(painter)
+
+    def _paint_calibration(self, painter):
+        self._paint_axis_lines(painter)
+        self._paint_anchors(painter)
+        self._paint_instruction_box(painter)
+
+    def _paint_axis_lines(self, painter):
+        """Draw a guide between the two anchors of each axis once both
+        exist, so the user sees the line the calibration will define."""
+        for axis, color in (("x", _X_COLOR), ("y", _Y_COLOR)):
+            anchors = [a for a in self._session.anchors() if a[0] == axis]
+            if len(anchors) < 2:
+                continue
+            p0 = self._local_from_physical(anchors[0][2], anchors[0][3])
+            p1 = self._local_from_physical(anchors[1][2], anchors[1][3])
+            pen = QPen(color, 1)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.drawLine(p0, p1)
+
+    def _paint_anchors(self, painter):
+        """Draw a crosshair marker (and value label) for each anchor."""
+        for axis, _index, px, py, value in self._session.anchors():
+            local = self._local_from_physical(px, py)
+            color = _X_COLOR if axis == "x" else _Y_COLOR
+            x, y = local.x(), local.y()
+            painter.setPen(QPen(color, 2))
+            painter.drawLine(x - 8, y, x + 8, y)
+            painter.drawLine(x, y - 8, x, y + 8)
+            painter.setPen(QPen(QColor(20, 20, 20), 1))
+            painter.setBrush(QColor(255, 255, 255, 220))
+            painter.drawEllipse(local, 3, 3)
+            if value is not None:
+                self._draw_anchor_label(painter, local, value, color)
+
+    def _draw_anchor_label(self, painter, local, value, color):
+        """Paint a value beside its anchor on a dark halo for legibility."""
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        text = str(value)
+        metrics = QFontMetricsF(font)
+        box = QRectF(
+            local.x() + 10,
+            local.y() - metrics.height() / 2 - 2,
+            metrics.horizontalAdvance(text) + 8,
+            metrics.height() + 4,
+        )
+        painter.fillRect(box, QColor(20, 20, 20, 200))
+        painter.setPen(color)
+        painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
+
+    def _paint_instruction_box(self, painter):
+        """Paint the translucent prompt box at the bottom of the window."""
+        box = QRectF(20, self.height() - 92, self.width() - 40, 72)
+        painter.fillRect(box, QColor(20, 20, 20, 215))
+        painter.setPen(QPen(QColor(255, 255, 255, 40), 1))
+        painter.drawRoundedRect(box, 8, 8)
+
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        if self._session.active:
+            title_color = QColor(235, 235, 235)
+        else:
+            title_color = QColor(120, 230, 140)
+        painter.setPen(title_color)
+        painter.drawText(
+            QRectF(box.x() + 8, box.y() + 4, box.width() - 16, 16),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            self._session.prompt(),
+        )
+
+        if self._session.expecting_value:
+            self._draw_value_input(painter, box)
+        if self._value_error:
+            small = QFont()
+            small.setPointSize(8)
+            painter.setFont(small)
+            painter.setPen(QColor(255, 120, 120))
+            painter.drawText(
+                QRectF(box.x() + 8, box.y() + 42, box.width() - 16, 14),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                self._value_error,
+            )
+
+        hint = QFont()
+        hint.setPointSize(8)
+        painter.setFont(hint)
+        painter.setPen(QColor(180, 180, 180))
+        if self._session.active:
+            hint_text = "Ctrl+Z undo  ·  Esc cancel"
+        else:
+            hint_text = "Ctrl+N redo  ·  Esc hide"
+        painter.drawText(
+            QRectF(box.x() + 8, box.y() + 56, box.width() - 16, 12),
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            hint_text,
+        )
+
+    def _draw_value_input(self, painter, box):
+        """Paint the typed value and a blinking caret on the input line."""
+        font = QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        painter.setFont(font)
+        metrics = QFontMetricsF(font)
+        line = QRectF(box.x() + 8, box.y() + 22, box.width() - 16, 20)
+        text = self._value_text or " "
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            line,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            text,
+        )
+        if self._caret_visible:
+            caret_x = line.x() + metrics.horizontalAdvance(text) + 1
+            cy = line.center().y()
+            painter.drawLine(
+                QPointF(caret_x, cy - 7), QPointF(caret_x, cy + 7)
+            )
 
     def resizeEvent(self, event):
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)

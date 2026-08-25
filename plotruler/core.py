@@ -122,6 +122,16 @@ class CalibrationSession:
         """True while a calibration is still being entered."""
         return self._step < len(self._STEPS)
 
+    @property
+    def expecting_click(self):
+        """True when the next step needs a point click."""
+        return self.active and self._STEPS[self._step][0] == "click"
+
+    @property
+    def expecting_value(self):
+        """True when the next step needs a typed value."""
+        return self.active and self._STEPS[self._step][0] == "value"
+
     def prompt(self):
         """Return the instruction for the step currently being waited on."""
         if not self.active:
