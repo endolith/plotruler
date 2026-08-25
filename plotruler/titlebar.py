@@ -1,10 +1,12 @@
 """The custom title bar of the overlay window.
 
 There is no native title bar on a frameless translucent window, so we
-paint our own: a translucent strip with the app name and the standard
-window controls (minimize to tray, maximize/restore, close). Drag the
-empty strip to move the window; double-click it to maximize or restore.
-Everything is drawn with QPainter — no native widgets.
+paint our own: a translucent red strip with the app name and the
+standard window controls (minimize to tray, maximize/restore, close).
+Moving, snapping, and double-click-maximize are handled by the Win32
+hit-test shim, which makes the OS treat this strip as a real caption,
+so Aero Snap and external window tools work. Everything here is drawn
+with QPainter — no native widgets.
 """
 
 from PySide6.QtCore import QPointF, QRectF, QSizeF, Qt
@@ -19,14 +21,13 @@ _CLOSE_BG = QColor(232, 17, 35)
 
 
 class TitleBar(QWidget):
-    """A draggable, translucent title strip painted on the overlay."""
+    """A translucent title strip painted on the overlay."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._min_rect = QRectF()
         self._max_rect = QRectF()
         self._close_rect = QRectF()
-        self._drag_offset = None
         self._hover_button = None
         self.setMouseTracking(True)
 
@@ -42,6 +43,13 @@ class TitleBar(QWidget):
             w - 3 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
         )
 
+    def is_over_buttons(self, pos):
+        """True when a window-coordinate point hits a control button."""
+        for rect in (self._min_rect, self._max_rect, self._close_rect):
+            if rect.contains(pos):
+                return True
+        return False
+
     def _button_at(self, pos):
         for rect, name in (
             (self._min_rect, "min"),
@@ -56,9 +64,14 @@ class TitleBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        # Backing strip: translucent dark so the bar reads clearly over
-        # any graph while the rest of the window stays see-through.
-        painter.fillRect(self.rect(), QColor(28, 28, 28, 210))
+        # Backing strip: translucent dark red so the bar reads clearly
+        # over any graph while the rest of the window stays see-through.
+        painter.fillRect(self.rect(), QColor(45, 10, 10, 220))
+        # A red accent line along the bottom so the bar's edge stays
+        # visible even over a black background.
+        painter.fillRect(
+            0, self.height() - 2, self.width(), 2, QColor(255, 90, 90, 220)
+        )
 
         # App name.
         font = QFont()
@@ -124,35 +137,12 @@ class TitleBar(QWidget):
             self.window().toggle_maximize()
         elif button == "close":
             self.window().close_app()
-        elif not self.window().is_maximized():
-            self._drag_offset = (
-                event.globalPosition().toPoint()
-                - self.window().frameGeometry().topLeft()
-            )
-
-    def mouseDoubleClickEvent(self, event):
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self._button_at(event.position()) is None
-        ):
-            self._drag_offset = None
-            self.window().toggle_maximize()
 
     def mouseMoveEvent(self, event):
         hover = self._button_at(event.position())
         if hover != self._hover_button:
             self._hover_button = hover
             self.update()
-        if (
-            self._drag_offset is not None
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
-            self.window().move(
-                event.globalPosition().toPoint() - self._drag_offset
-            )
-
-    def mouseReleaseEvent(self, event):
-        self._drag_offset = None
 
     def leaveEvent(self, event):
         self._hover_button = None

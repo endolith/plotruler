@@ -6,8 +6,10 @@ the graph shows through because the background is painted translucent.
 Calibration and readout geometry all live in absolute screen
 coordinates, so moving or resizing this window never affects them.
 
-The custom title bar and resize handles are implemented by TitleBar and
-Resizer. A transparent margin below the title bar remains empty until
+The custom title bar is drawn by TitleBar. Moving, resizing, snapping,
+and GridMove compatibility come from the Win32 hit-test shim, which
+makes the OS treat the title bar as a caption and the edges as real
+borders. A transparent margin below the title bar remains empty until
 the calibration flow (and readout) are wired in later.
 """
 
@@ -15,8 +17,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
-from .resize import Resizer
+from . import win_hittest
 from .titlebar import TITLEBAR_HEIGHT, TitleBar
+
+# Width of the invisible edge hit-zones, in logical pixels.
+_EDGE = 8
 
 
 class OverlayWindow(QWidget):
@@ -32,8 +37,6 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(320, 200)
         self.resize(900, 600)
-        # Without mouse tracking the resize cursors would only appear
-        # mid-drag; edges need to react on hover too.
         self.setMouseTracking(True)
 
         self._maximized = False
@@ -41,7 +44,6 @@ class OverlayWindow(QWidget):
 
         self.title_bar = TitleBar(self)
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
-        self.resizer = Resizer(self)
 
     def is_maximized(self):
         return self._maximized
@@ -63,36 +65,53 @@ class OverlayWindow(QWidget):
     def close_app(self):
         QApplication.quit()
 
-    def titlebar_under(self, pos):
-        """True when a local position is over the title bar strip."""
-        return pos.y() < TITLEBAR_HEIGHT
+    def hit_test_code(self, local):
+        """Classify a local point for Win32 hit testing.
 
-    # --- Mouse: forward to title bar or resizer, not both ---
-    def mousePressEvent(self, event):
-        if self.titlebar_under(event.position().toPoint()):
-            self.title_bar.mousePressEvent(event)
-        else:
-            self.resizer.on_mouse_press(event)
+        Returns an HT* value telling Windows what this part of the
+        window is for: borders resize natively, the title bar is a real
+        caption (drag + snap), and everything else is ordinary client
+        area that Qt receives.
+        """
+        w, h = self.width(), self.height()
+        x, y = local.x(), local.y()
+        if not self.rect().contains(local):
+            return win_hittest.HTCLIENT
+        if x < _EDGE and y < _EDGE:
+            return win_hittest.HTTOPLEFT
+        if x >= w - _EDGE and y < _EDGE:
+            return win_hittest.HTTOPRIGHT
+        if x < _EDGE and y >= h - _EDGE:
+            return win_hittest.HTBOTTOMLEFT
+        if x >= w - _EDGE and y >= h - _EDGE:
+            return win_hittest.HTBOTTOMRIGHT
+        if y < _EDGE:
+            return win_hittest.HTTOP
+        if y >= h - _EDGE:
+            return win_hittest.HTBOTTOM
+        if x < _EDGE:
+            return win_hittest.HTLEFT
+        if x >= w - _EDGE:
+            return win_hittest.HTRIGHT
+        if y < TITLEBAR_HEIGHT:
+            if self.title_bar.is_over_buttons(local):
+                return win_hittest.HTCLIENT
+            return win_hittest.HTCAPTION
+        return win_hittest.HTCLIENT
 
-    def mouseMoveEvent(self, event):
-        if self.titlebar_under(event.position().toPoint()):
-            self.title_bar.mouseMoveEvent(event)
-        else:
-            self.resizer.on_mouse_move(event)
-
-    def mouseReleaseEvent(self, event):
-        self.title_bar.mouseReleaseEvent(event)
-        self.resizer.on_mouse_release(event)
+    def nativeEvent(self, event_type, message):
+        return win_hittest.handle_native_event(self, event_type, message)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # A faint tint so the window is perceivable, while the graph
-        # underneath still shows through.
-        painter.fillRect(self.rect(), QColor(255, 255, 255, 14))
-        # A clear border so the user can see where the overlay is and
-        # grab it to resize.
-        painter.setPen(QPen(QColor(60, 60, 60, 200), 2))
+        # A faint reddish tint so the window is perceivable over both
+        # white and black backgrounds, while the graph underneath still
+        # shows through.
+        painter.fillRect(self.rect(), QColor(255, 60, 60, 26))
+        # A clear red border so the user can see where the overlay is
+        # and grab it to resize, on light and dark backgrounds alike.
+        painter.setPen(QPen(QColor(255, 90, 90, 240), 2))
         painter.drawRect(self.rect().adjusted(1, 1, -2, -2))
 
     def resizeEvent(self, event):
