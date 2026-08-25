@@ -48,6 +48,7 @@ class OverlayWindow(QWidget):
         # happen before the window is first shown.
         self.winId()
         win_hittest.apply_native_overlapped_style(self)
+        win_hittest.disable_window_animations(self)
 
     def toggle_maximize(self):
         """Fill the screen, or return to the last window size."""

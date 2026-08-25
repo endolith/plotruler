@@ -128,6 +128,32 @@ def apply_native_overlapped_style(window):
     )
 
 
+def disable_window_animations(window):
+    """Turn off this window's transition animations.
+
+    Windows plays a slide-then-expand animation when maximizing. On a
+    translucent frameless overlay that reads as a flash toward the
+    top-left corner before the window fills the screen, so suppress the
+    transitions for this window.
+    """
+    if wintypes is None:
+        return
+    try:
+        dwmapi = ctypes.windll.dwmapi
+        DWMWA_TRANSITIONS_FORCEDISABLED = 3
+        value = ctypes.c_int(1)
+        dwmapi.DwmSetWindowAttribute(
+            int(window.winId()),
+            DWMWA_TRANSITIONS_FORCEDISABLED,
+            ctypes.byref(value),
+            ctypes.sizeof(value),
+        )
+    except Exception:
+        # The attribute is optional; some configurations reject it and
+        # that is fine — the flash is cosmetic.
+        pass
+
+
 def handle_native_event(window, event_type, message):
     """Route a native event to its handler; returns (handled, result)."""
     if wintypes is None or event_type != b"windows_generic_MSG":
