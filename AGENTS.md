@@ -39,8 +39,9 @@ ruff format .              # auto-format
 - Comments explain **why**, not what. If a comment would just restate the code, rewrite
   the code to be clearer instead. Never delete or omit comments while editing.
 - Line length 79 (PEP8), enforced by ruff.
-- Pythonic and simple. Prefer the straightforward solution; cleverness and
-  micro-optimization are bugs waiting to happen in a small tool like this.
+- Pythonic and simple. Write code a reader can follow without mental gymnastics;
+  favor the clear, straightforward approach over clever one-liners and premature
+  optimization.
 - Architecture: the pixel→value calibration math must stay **Qt-free** (importable
   without PySide6) so it stays unit-testable and portable. Everything else (overlay,
   calibration UI, tray, hotkeys) is ordinary Qt code. No artificial core/shell package
@@ -67,9 +68,11 @@ ruff format .              # auto-format
 
 ## Hotkey
 
-- **Ctrl+Alt+Space** is the default summon/toggle hotkey. It is configurable — this is
-  required, not optional. Note: Visual Studio and ReSharper both bind Ctrl+Alt+Space, so
-  IDE users will want to change it; the default is fine for everyone else.
+- **Win+Alt+P** is the default summon/toggle hotkey (P for PlotRuler). It is configurable —
+  this is required, not optional. It is unclaimed on stock Windows; the only known
+  collision is PowerToys' optional "Mouse Pointer Crosshairs", and Win+Ctrl+P is a free
+  alternative if that matters. Avoid plain Ctrl+Alt+Space — Visual Studio and ReSharper
+  both bind it, so IDE users would have to remap.
 - **Ctrl+N** (new calibration) and **Esc** (hide) are in-app keys, not global.
 
 ## Commits
