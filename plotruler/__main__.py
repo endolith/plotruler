@@ -1,14 +1,18 @@
-"""Run PlotRuler with `python -m plotruler`.
+"""Run PlotRuler with `python -m plotruler`."""
 
-The GUI is not built yet; this entry point is a placeholder so the
-module can be run without an import error.
-"""
+import sys
 
-from . import __version__
+from PySide6.QtWidgets import QApplication
+
+from .overlay import OverlayWindow
 
 
 def main():
-    print(f"PlotRuler {__version__} — GUI coming soon.")
+    app = QApplication(sys.argv)
+    app.setApplicationName("PlotRuler")
+    window = OverlayWindow()
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
