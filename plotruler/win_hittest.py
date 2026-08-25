@@ -104,8 +104,12 @@ def apply_native_overlapped_style(window):
         return
     hwnd = int(window.winId())
     user32 = ctypes.windll.user32
-    style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+    style = user32.GetWindowLongW(hwnd, GWL_STYLE) & 0xFFFFFFFF
     style = (style & ~WS_POPUP) | WS_OVERLAPPEDWINDOW
+    style &= 0xFFFFFFFF
+    # Win32 styles are signed 32-bit; convert before calling back.
+    if style >= 0x80000000:
+        style -= 0x100000000
     user32.SetWindowLongW(hwnd, GWL_STYLE, style)
     # Asking for a frame recalculation makes Windows re-query the frame
     # (WM_NCCALCSIZE) so the collapsed client rect takes effect at once.
