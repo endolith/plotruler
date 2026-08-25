@@ -354,6 +354,11 @@ class OverlayWindow(QWidget):
         ):
             self._maximized = False
             _dbg("cleared _maximized after drag")
+        # While Windows drags the window it moves the painted surface as a
+        # whole, so screen-anchored calibration markers would stay glued
+        # to the old position. Force a repaint so they recompute to their
+        # true screen positions.
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -404,7 +409,7 @@ class OverlayWindow(QWidget):
                 self._draw_anchor_label(painter, local, value, color)
 
     def _draw_anchor_label(self, painter, local, value, color):
-        """Paint a value beside its anchor on a dark halo for legibility."""
+        """Paint a value beside its anchor on a light chip for legibility."""
         font = QFont()
         font.setPointSize(9)
         font.setBold(True)
@@ -417,23 +422,23 @@ class OverlayWindow(QWidget):
             metrics.horizontalAdvance(text) + 8,
             metrics.height() + 4,
         )
-        painter.fillRect(box, QColor(20, 20, 20, 200))
-        painter.setPen(color)
+        painter.fillRect(box, QColor(255, 255, 255, 235))
+        painter.setPen(QColor(20, 20, 20))
         painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
     def _paint_instruction_box(self, painter):
         """Paint the translucent prompt box at the bottom of the window."""
         box = QRectF(20, self.height() - 92, self.width() - 40, 72)
-        painter.fillRect(box, QColor(20, 20, 20, 215))
-        painter.setPen(QPen(QColor(255, 255, 255, 40), 1))
+        painter.fillRect(box, QColor(20, 20, 20, 235))
+        painter.setPen(QPen(QColor(255, 255, 255, 50), 1))
         painter.drawRoundedRect(box, 8, 8)
 
         font = QFont()
-        font.setPointSize(9)
+        font.setPointSize(11)
         font.setBold(True)
         painter.setFont(font)
         if self._session.active:
-            title_color = QColor(235, 235, 235)
+            title_color = QColor(255, 255, 255)
         else:
             title_color = QColor(120, 230, 140)
         painter.setPen(title_color)
@@ -457,9 +462,9 @@ class OverlayWindow(QWidget):
             )
 
         hint = QFont()
-        hint.setPointSize(8)
+        hint.setPointSize(9)
         painter.setFont(hint)
-        painter.setPen(QColor(180, 180, 180))
+        painter.setPen(QColor(200, 200, 200))
         if self._session.active:
             hint_text = "Ctrl+Z undo  ·  Esc cancel"
         else:
@@ -473,7 +478,7 @@ class OverlayWindow(QWidget):
     def _draw_value_input(self, painter, box):
         """Paint the typed value and a blinking caret on the input line."""
         font = QFont()
-        font.setPointSize(10)
+        font.setPointSize(11)
         font.setBold(True)
         painter.setFont(font)
         metrics = QFontMetricsF(font)
