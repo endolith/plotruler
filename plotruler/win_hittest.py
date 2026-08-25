@@ -29,6 +29,16 @@ except ImportError, OSError:
 
 from PySide6.QtCore import QPoint
 
+debug_enabled = False
+
+
+def _debug(msg):
+    if debug_enabled:
+        import sys
+
+        print("[hittest]", msg, file=sys.stderr, flush=True)
+
+
 WM_NCHITTEST = 0x0084
 WM_NCLBUTTONDBLCLK = 0x00A3
 WM_NCCALCSIZE = 0x0083
@@ -46,6 +56,7 @@ HTBOTTOMLEFT = 16
 HTBOTTOMRIGHT = 17
 
 GWL_STYLE = -16
+GWL_EXSTYLE = -20
 WS_POPUP = 0x80000000
 WS_CAPTION = 0x00C00000
 WS_THICKFRAME = 0x00040000
@@ -55,6 +66,9 @@ WS_MAXIMIZEBOX = 0x00010000
 WS_OVERLAPPEDWINDOW = (
     WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
 )
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_TOPMOST = 0x00000008
+WS_EX_LAYERED = 0x00080000
 
 SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
@@ -128,30 +142,18 @@ def apply_native_overlapped_style(window):
     )
 
 
-def disable_window_animations(window):
-    """Turn off this window's transition animations.
-
-    Windows plays a slide-then-expand animation when maximizing. On a
-    translucent frameless overlay that reads as a flash toward the
-    top-left corner before the window fills the screen, so suppress the
-    transitions for this window.
-    """
+def current_styles(window):
+    """Return the window's live style and extended-style words, if any."""
     if wintypes is None:
-        return
+        return None, None
     try:
-        dwmapi = ctypes.windll.dwmapi
-        DWMWA_TRANSITIONS_FORCEDISABLED = 3
-        value = ctypes.c_int(1)
-        dwmapi.DwmSetWindowAttribute(
-            int(window.winId()),
-            DWMWA_TRANSITIONS_FORCEDISABLED,
-            ctypes.byref(value),
-            ctypes.sizeof(value),
-        )
+        hwnd = int(window.winId())
+        user32 = ctypes.windll.user32
+        style = user32.GetWindowLongW(hwnd, GWL_STYLE) & 0xFFFFFFFF
+        exstyle = user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & 0xFFFFFFFF
+        return style, exstyle
     except Exception:
-        # The attribute is optional; some configurations reject it and
-        # that is fine — the flash is cosmetic.
-        pass
+        return None, None
 
 
 def handle_native_event(window, event_type, message):
@@ -163,7 +165,9 @@ def handle_native_event(window, event_type, message):
     except TypeError, ValueError:
         return False, 0
     if msg.message == WM_NCHITTEST:
-        code = window.hit_test_code(_local_point(window, msg.lParam))
+        local = _local_point(window, msg.lParam)
+        code = window.hit_test_code(local)
+        _debug(f"NCHITTEST at {local.x()},{local.y()} -> HT{code}")
         return True, code
     if msg.message == WM_NCLBUTTONDBLCLK:
         # The default is the system menu; we want maximize/restore like a

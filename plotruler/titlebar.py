@@ -106,7 +106,7 @@ class TitleBar(QWidget):
             painter.fillRect(self._max_rect, _HOVER_BG)
         painter.setPen(QPen(_GLYPH, 2))
         rect = self._max_rect
-        if self.window().isMaximized():
+        if self.window().is_maximized():
             # Restore icon: two overlapping squares.
             painter.drawRect(QRectF(rect.x() + 9, rect.y() + 13, 14, 14))
             painter.drawRect(QRectF(rect.x() + 13, rect.y() + 9, 14, 14))
