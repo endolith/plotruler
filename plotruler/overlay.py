@@ -39,24 +39,22 @@ class OverlayWindow(QWidget):
         self.resize(900, 600)
         self.setMouseTracking(True)
 
-        self._maximized = False
-        self._saved_geometry = None
-
         self.title_bar = TitleBar(self)
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
 
-    def is_maximized(self):
-        return self._maximized
+        # Swap Qt's WS_POPUP for real overlapped-window styles so Windows
+        # treats this as a normal window: snapping, drag-to-edge, and the
+        # taskbar all work. The frame is hidden by WM_NCCALCSIZE. Must
+        # happen before the window is first shown.
+        self.winId()
+        win_hittest.apply_native_overlapped_style(self)
 
     def toggle_maximize(self):
         """Fill the screen, or return to the last window size."""
-        if self._maximized:
-            self.setGeometry(self._saved_geometry)
-            self._maximized = False
+        if self.isMaximized():
+            self.showNormal()
         else:
-            self._saved_geometry = self.geometry()
-            self.setGeometry(self.screen().availableGeometry())
-            self._maximized = True
+            self.showMaximized()
 
     def minimize_to_tray(self):
         """Hide the overlay; the app stays resident in the tray."""
