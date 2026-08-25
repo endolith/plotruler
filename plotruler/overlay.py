@@ -422,15 +422,22 @@ class OverlayWindow(QWidget):
             metrics.horizontalAdvance(text) + 8,
             metrics.height() + 4,
         )
-        painter.fillRect(box, QColor(255, 255, 255, 235))
+        painter.fillRect(box, QColor(255, 255, 255, 255))
         painter.setPen(QColor(20, 20, 20))
         painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
     def _paint_instruction_box(self, painter):
-        """Paint the translucent prompt box at the bottom of the window."""
+        """Paint the prompt box at the bottom of the window.
+
+        The box is fully opaque (alpha 255) even though the rest of the
+        window is translucent. A semi-transparent box reads as white-on-
+        gray whenever bright graph content shows through, which made the
+        prompt unreadable; opaque dark with white text guarantees
+        contrast over any background.
+        """
         box = QRectF(20, self.height() - 92, self.width() - 40, 72)
-        painter.fillRect(box, QColor(20, 20, 20, 235))
-        painter.setPen(QPen(QColor(255, 255, 255, 50), 1))
+        painter.fillRect(box, QColor(18, 18, 18, 255))
+        painter.setPen(QPen(QColor(255, 255, 255, 70), 1))
         painter.drawRoundedRect(box, 8, 8)
 
         font = QFont()
