@@ -209,9 +209,19 @@ class OverlayWindow(QWidget):
     def toggle_visibility(self):
         """Show the overlay if hidden, or hide it if visible."""
         if self.isVisible():
+            # Remember the window state before hiding so that a re-shown
+            # maximized/snapped window does not come back at its normal
+            # (pre-snap) size.
+            self._pre_hide_state = self.windowState()
             self.hide()
         else:
             self.show()
+            state = getattr(
+                self, "_pre_hide_state", Qt.WindowState.WindowNoState
+            )
+            if state & Qt.WindowState.WindowMaximized:
+                self.setWindowState(state)
+            self._maximized = self.isMaximized()
             self.raise_()
             self.activateWindow()
 
