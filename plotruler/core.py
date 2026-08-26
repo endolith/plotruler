@@ -132,6 +132,18 @@ class CalibrationSession:
         """True when the next step needs a typed value."""
         return self.active and self._STEPS[self._step][0] == "value"
 
+    @property
+    def current_axis(self):
+        """The axis ('x' or 'y') being calibrated right now, or None.
+
+        Returns the axis of the current step whether it is awaiting a
+        click or a value, so the overlay can draw a live guide line in
+        the right orientation while the user aligns a point.
+        """
+        if not self.active:
+            return None
+        return self._STEPS[self._step][1]
+
     def prompt(self):
         """Return the instruction for the step currently being waited on."""
         if not self.active:

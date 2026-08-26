@@ -137,6 +137,28 @@ def test_expecting_flags_track_the_step_kind():
     assert session.expecting_click and not session.expecting_value
 
 
+def test_current_axis_reports_the_axis_being_calibrated():
+    """current_axis must report X for the X steps and Y for the Y steps,
+    both while waiting for a click and a value, so the overlay can draw a
+    live guide line in the matching orientation."""
+    session = CalibrationSession()
+    assert session.current_axis == "x"
+    session.record_point(100, 50)
+    assert session.current_axis == "x"
+    session.record_value(3.0)
+    session.record_point(200, 60)
+    assert session.current_axis == "x"
+    session.record_value(4.0)
+    assert session.current_axis == "y"
+    session.record_point(300, 100)
+    assert session.current_axis == "y"
+    session.record_value(5.0)
+    session.record_point(300, 300)
+    assert session.current_axis == "y"
+    session.record_value(6.0)
+    assert session.current_axis is None
+
+
 def test_flags_are_false_when_done():
     """Both expecting flags must be false once the calibration is complete,
     so the overlay stops capturing input."""

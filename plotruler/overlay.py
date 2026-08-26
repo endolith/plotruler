@@ -380,13 +380,17 @@ class OverlayWindow(QWidget):
         if DEBUG and event.buttons():
             pos = event.position().toPoint()
             _dbg(f"mouseMove (dragging) at {pos.x()},{pos.y()}")
-        # Track the cursor for the hover readout whenever we have a
-        # calibration; only repaint when the position actually changes so
-        # the crosshair does not shimmer on every mouse move.
+        # Track the cursor. While picking a calibration point the live
+        # guide line follows it; with a calibration done the hover readout
+        # crosshair does. Repaint only when the position changes so the
+        # guide does not shimmer on every mouse move.
         old = self._hover_pos
         self._hover_pos = event.position().toPoint()
         self._hover_active = self._calibration is not None
-        if self._hover_active and self._hover_pos != old:
+        active = self._hover_active or (
+            self._session is not None and self._session.expecting_click
+        )
+        if active and self._hover_pos != old:
             self.update()
         super().mouseMoveEvent(event)
 
@@ -447,47 +451,58 @@ class OverlayWindow(QWidget):
             self._paint_calibration(painter)
 
     def _paint_calibration(self, painter):
-        self._paint_axis_lines(painter)
         self._paint_anchors(painter)
+        self._paint_live_guide(painter)
         self._paint_instruction(painter)
 
-    def _paint_axis_lines(self, painter):
-        """Draw guide lines through the anchors so they align with the
-        graph's gridlines: X anchors get a vertical line through their
-        pixel, Y anchors a horizontal line. One guide per anchor appears
-        as soon as that anchor is clicked."""
-        for axis in ("x", "y"):
-            color = _X_COLOR if axis == "x" else _Y_COLOR
-            pen = QPen(color, 1)
-            pen.setStyle(Qt.PenStyle.DashLine)
-            painter.setPen(pen)
-            for anchor in self._session.anchors():
-                if anchor[0] != axis:
-                    continue
-                local = self._local_from_physical(anchor[2], anchor[3])
-                if axis == "x":
-                    painter.drawLine(
-                        QPoint(local.x(), TITLEBAR_HEIGHT),
-                        QPoint(local.x(), self.height()),
-                    )
-                else:
-                    painter.drawLine(
-                        QPoint(0, local.y()),
-                        QPoint(self.width(), local.y()),
-                    )
+    def _paint_live_guide(self, painter):
+        """Draw a guide line that follows the cursor while a point is
+        being picked, in the current axis direction.
+
+        This lets the user align the click with the graph's gridline: a
+        vertical line while picking an X point, a horizontal one for Y.
+        It fades away once a value is being typed, since the point is
+        already placed.
+        """
+        if not self._session.expecting_click:
+            return
+        axis = self._session.current_axis
+        color = _X_COLOR if axis == "x" else _Y_COLOR
+        pen = QPen(color, 1)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        if axis == "x":
+            painter.drawLine(
+                QPoint(self._hover_pos.x(), TITLEBAR_HEIGHT),
+                QPoint(self._hover_pos.x(), self.height()),
+            )
+        else:
+            painter.drawLine(
+                QPoint(0, self._hover_pos.y()),
+                QPoint(self.width(), self._hover_pos.y()),
+            )
 
     def _paint_anchors(self, painter):
-        """Draw a crosshair marker (and value label) for each anchor."""
+        """Draw the placed anchors as a dot with a guide line in the axis
+        direction.
+
+        Each axis only cares about one coordinate: an X anchor marks the
+        pixel's horizontal position, a Y anchor the vertical. Draw just
+        the guide line along that axis (not a small cross) so the marker
+        reads as a gridline crossing, not a cursor.
+        """
         for axis, _index, px, py, value in self._session.anchors():
             local = self._local_from_physical(px, py)
             color = _X_COLOR if axis == "x" else _Y_COLOR
             x, y = local.x(), local.y()
+            if axis == "x":
+                painter.drawLine(
+                    QPoint(x, TITLEBAR_HEIGHT), QPoint(x, self.height())
+                )
+            else:
+                painter.drawLine(QPoint(0, y), QPoint(self.width(), y))
             painter.setPen(QPen(color, 2))
-            painter.drawLine(x - 8, y, x + 8, y)
-            painter.drawLine(x, y - 8, x, y + 8)
-            painter.setPen(QPen(QColor(20, 20, 20), 1))
-            painter.setBrush(QColor(255, 255, 255, 220))
-            painter.drawEllipse(local, 3, 3)
+            painter.drawEllipse(local, 4, 4)
             if value is not None:
                 self._draw_anchor_label(painter, local, color, str(value))
 
