@@ -452,18 +452,29 @@ class OverlayWindow(QWidget):
         self._paint_instruction(painter)
 
     def _paint_axis_lines(self, painter):
-        """Draw a guide between the two anchors of each axis once both
-        exist, so the user sees the line the calibration will define."""
-        for axis, color in (("x", _X_COLOR), ("y", _Y_COLOR)):
-            anchors = [a for a in self._session.anchors() if a[0] == axis]
-            if len(anchors) < 2:
-                continue
-            p0 = self._local_from_physical(anchors[0][2], anchors[0][3])
-            p1 = self._local_from_physical(anchors[1][2], anchors[1][3])
+        """Draw guide lines through the anchors so they align with the
+        graph's gridlines: X anchors get a vertical line through their
+        pixel, Y anchors a horizontal line. One guide per anchor appears
+        as soon as that anchor is clicked."""
+        for axis in ("x", "y"):
+            color = _X_COLOR if axis == "x" else _Y_COLOR
             pen = QPen(color, 1)
             pen.setStyle(Qt.PenStyle.DashLine)
             painter.setPen(pen)
-            painter.drawLine(p0, p1)
+            for anchor in self._session.anchors():
+                if anchor[0] != axis:
+                    continue
+                local = self._local_from_physical(anchor[2], anchor[3])
+                if axis == "x":
+                    painter.drawLine(
+                        QPoint(local.x(), TITLEBAR_HEIGHT),
+                        QPoint(local.x(), self.height()),
+                    )
+                else:
+                    painter.drawLine(
+                        QPoint(0, local.y()),
+                        QPoint(self.width(), local.y()),
+                    )
 
     def _paint_anchors(self, painter):
         """Draw a crosshair marker (and value label) for each anchor."""
@@ -512,12 +523,16 @@ class OverlayWindow(QWidget):
         metrics = QFontMetricsF(font)
         height = metrics.height()
         baseline = pos.y() + height / 2
-        # Dark halo: draw the text a few times offset by a pixel, then the
-        # colored glyph on top. This reads as an outline, not a box.
-        halo_color = QColor(10, 10, 10, 200)
+        # Dark halo: draw the text offset around the glyph, including the
+        # diagonals, then the colored glyph on top. This reads as a soft
+        # outline, not a box, and stays legible on light or dark content.
+        halo_color = QColor(8, 8, 8, 220)
         painter.setPen(halo_color)
-        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
-            painter.drawText(QPointF(pos.x() + dx, baseline + dy), text)
+        for dx in (-2, -1, 0, 1, 2):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                painter.drawText(QPointF(pos.x() + dx, baseline + dy), text)
         painter.setPen(color)
         painter.drawText(QPointF(pos.x(), baseline), text)
         painter.restore()
@@ -612,14 +627,23 @@ class OverlayWindow(QWidget):
         x_text = self._calibration.x.format(vx)
         y_text = self._calibration.y.format(vy)
 
-        # Crosshair: thin translucent lines through the cursor, snapped to
-        # the graph pixel so the readout lines up with it.
+        # Crosshair: two translucent lines through the cursor, snapped to
+        # the graph pixel so the readout lines up with it. Drawn with a
+        # dark underline so they read as a clear hairline over any content.
         x = self._hover_pos.x()
         y = self._hover_pos.y()
-        line_color = QColor(255, 255, 255, 60)
-        painter.setPen(QPen(line_color, 1))
-        painter.drawLine(QPoint(0, y), QPoint(self.width(), y))
-        painter.drawLine(QPoint(x, TITLEBAR_HEIGHT), QPoint(x, self.height()))
+        for color, ox, oy in (
+            (QColor(8, 8, 8, 160), 1, 0),
+            (QColor(8, 8, 8, 160), -1, 0),
+            (QColor(8, 8, 8, 160), 0, 1),
+            (QColor(8, 8, 8, 160), 0, -1),
+            (QColor(255, 255, 255, 110), 0, 0),
+        ):
+            painter.setPen(QPen(color, 1))
+            painter.drawLine(QPoint(0, y + oy), QPoint(self.width(), y + oy))
+            painter.drawLine(
+                QPoint(x + ox, TITLEBAR_HEIGHT), QPoint(x + ox, self.height())
+            )
 
         # Readout text near the cursor, offset below-right so it does not
         # cover the point being read.
