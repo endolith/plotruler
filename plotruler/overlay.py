@@ -18,7 +18,7 @@ Set PLOTRULER_DEBUG=1 to log window state and native events to stderr.
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QPointF, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -28,7 +28,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QWidget
 
-from . import win_hittest
+from . import storage, win_hittest
 from .core import CalibrationSession
 from .titlebar import TITLEBAR_HEIGHT, TitleBar
 
@@ -44,6 +44,22 @@ _Y_COLOR = QColor(255, 200, 80)
 _VALID_CHARS = set("0123456789.-+eE")
 
 DEBUG = bool(os.environ.get("PLOTRULER_DEBUG"))
+
+
+def _config_path():
+    """Return the config file path for the current user.
+
+    Uses the Qt-standard per-user config location so the file lands where
+    the OS expects (e.g. %APPDATA%/PlotRuler on Windows). The path is
+    resolved at call time because the app name is set in main().
+    """
+    base = (
+        QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.AppConfigLocation
+        )
+        or "."
+    )
+    return os.path.join(base, "plotruler.json")
 
 
 def _dbg(msg):
@@ -95,6 +111,16 @@ class OverlayWindow(QWidget):
         self._copy_timer.setSingleShot(True)
         self._copy_timer.setInterval(900)
         self._copy_timer.timeout.connect(self._clear_copy_notice)
+
+        # Debounce geometry writes so dragging or resizing does not hammer
+        # the disk on every pixel of movement.
+        self._geometry_timer = QTimer(self)
+        self._geometry_timer.setSingleShot(True)
+        self._geometry_timer.setInterval(600)
+        self._geometry_timer.timeout.connect(self._save_geometry)
+
+        self._config_path = _config_path()
+        self._restore_state()
 
         # Swap Qt's WS_POPUP for real overlapped-window styles so Windows
         # treats this as a normal window: snapping, drag-to-edge, and the
@@ -171,6 +197,36 @@ class OverlayWindow(QWidget):
 
     def close_app(self):
         QApplication.quit()
+
+    def _restore_state(self):
+        """Load the saved geometry and calibration, if any.
+
+        A saved calibration means the overlay opens already calibrated so
+        the user can read immediately without re-clicking anchors. A saved
+        geometry puts the window back where it was. Either can be absent
+        on a first run.
+        """
+        geometry = storage.geometry(self._config_path)
+        if geometry:
+            x, y, width, height = geometry
+            self.setGeometry(x, y, width, height)
+        self._calibration = storage.calibration(self._config_path)
+
+    def _save_geometry(self):
+        """Persist the current window geometry."""
+        g = self.geometry()
+        storage.save(
+            self._config_path,
+            geometry=[g.x(), g.y(), g.width(), g.height()],
+        )
+
+    def _schedule_geometry_save(self):
+        """Debounce a geometry save triggered by a move or resize."""
+        self._geometry_timer.start()
+
+    def _save_calibration(self):
+        """Persist the completed calibration."""
+        storage.save(self._config_path, calibration=self._calibration)
 
     def start_calibration(self):
         """Begin a fresh click-and-type calibration, or restart one."""
@@ -274,6 +330,7 @@ class OverlayWindow(QWidget):
             self._calibration = calibration
             self._session = None
             self._blink_timer.stop()
+            self._save_calibration()
         self.update()
 
     def mousePressEvent(self, event):
@@ -433,6 +490,7 @@ class OverlayWindow(QWidget):
         # to the old position. Force a repaint so they recompute to their
         # true screen positions.
         self.update()
+        self._schedule_geometry_save()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -685,4 +743,5 @@ class OverlayWindow(QWidget):
 
     def resizeEvent(self, event):
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
+        self._schedule_geometry_save()
         super().resizeEvent(event)
