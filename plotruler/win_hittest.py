@@ -76,6 +76,12 @@ SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
 
+# Window placement show commands for WINDOWPLACEMENT.showCmd.
+SW_HIDE = 0
+SW_SHOW = 5
+SW_SHOWNORMAL = 1
+SW_SHOWMAXIMIZED = 3
+
 
 class MINMAXINFO(ctypes.Structure):
     _fields_ = [
@@ -123,6 +129,48 @@ def window_rect(window):
         return rect.left, rect.top, rect.right, rect.bottom
     except Exception:
         return None
+
+
+class WINDOWPLACEMENT(ctypes.Structure):
+    _fields_ = [
+        ("length", wintypes.UINT),
+        ("flags", wintypes.UINT),
+        ("showCmd", wintypes.UINT),
+        ("ptMinPosition", wintypes.POINT),
+        ("ptMaxPosition", wintypes.POINT),
+        ("rcNormalPosition", wintypes.RECT),
+    ]
+
+
+def set_window_rect(window, rect, show=SW_SHOW):
+    """Place the window at a physical (left, top, right, bottom) rect.
+
+    Uses SetWindowPlacement, which sets the bounds and the window state
+    together. That is what makes a snapped window restore correctly: a
+    plain move/resize after show() is overridden by Windows re-applying
+    its stored snap restore position, whereas SetWindowPlacement overrides
+    that stored position in one atomic call.
+    """
+    if wintypes is None:
+        return
+    try:
+        hwnd = int(window.winId())
+        left, top, right, bottom = rect
+        placement = WINDOWPLACEMENT()
+        placement.length = ctypes.sizeof(WINDOWPLACEMENT)
+        placement.flags = 0
+        placement.showCmd = show
+        placement.ptMinPosition.x = 0
+        placement.ptMinPosition.y = 0
+        placement.ptMaxPosition.x = 0
+        placement.ptMaxPosition.y = 0
+        placement.rcNormalPosition.left = left
+        placement.rcNormalPosition.top = top
+        placement.rcNormalPosition.right = right
+        placement.rcNormalPosition.bottom = bottom
+        ctypes.windll.user32.SetWindowPlacement(hwnd, ctypes.byref(placement))
+    except Exception:
+        return
 
 
 def apply_native_overlapped_style(window):

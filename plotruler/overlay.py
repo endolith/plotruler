@@ -229,24 +229,16 @@ class OverlayWindow(QWidget):
             self.show()
             saved = getattr(self, "_pre_hide_geometry", None)
             if saved is not None:
-                # Drop any maximized state so the geometry rect is honored.
+                # Drop any maximized state so the rect is honored. Using
+                # SetWindowPlacement (not setGeometry) is essential: Windows
+                # otherwise re-applies a snapped window's stored restore
+                # position and overrides the move.
                 self.setWindowState(Qt.WindowState.WindowNoState)
-                self.setGeometry(self._physical_rect_to_logical(saved))
+                win_hittest.set_window_rect(self, saved)
                 self._pre_hide_geometry = None
             self._maximized = self.isMaximized()
             self.raise_()
             self.activateWindow()
-
-    def _physical_rect_to_logical(self, rect):
-        """Convert a physical (left, top, right, bottom) rect to a QRect."""
-        left, top, right, bottom = rect
-        dpr = self.devicePixelRatioF()
-        return QRect(
-            int(left / dpr),
-            int(top / dpr),
-            int((right - left) / dpr),
-            int((bottom - top) / dpr),
-        )
 
     def close_app(self):
         QApplication.quit()
