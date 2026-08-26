@@ -47,6 +47,9 @@ _EDGE = 8
 # against dark and light graph content.
 _X_COLOR = QColor(80, 200, 255)
 _Y_COLOR = QColor(255, 200, 80)
+# The calibrated-region guide: a green distinct from the axis hues so it
+# stays visible against black gridlines and does not read as an anchor.
+_REGION_COLOR = QColor(120, 255, 140)
 
 # Characters allowed while typing a calibration value.
 _VALID_CHARS = set("0123456789.-+eE")
@@ -699,23 +702,18 @@ class OverlayWindow(QWidget):
 
         The rectangle is anchored to absolute screen coordinates, not the
         window, so if the graph underneath is moved the box stays where it
-        was calibrated and the misalignment is easy to spot. It gets the
-        same treatment as the readout crosshair: a dark underline beneath
-        a light line so it reads clearly on any content.
+        was calibrated and the misalignment is easy to spot. Drawn dashed
+        like the calibration guides and in a green distinct from the axis
+        hues, so it stands out against black gridlines.
         """
         left, top, right, bottom = self._calibration.region()
         p0 = self._local_from_physical(left, top)
         p1 = self._local_from_physical(right, bottom)
         rect = QRect(p0, p1)
-        for color, ox, oy in (
-            (QColor(8, 8, 8, 160), 1, 0),
-            (QColor(8, 8, 8, 160), -1, 0),
-            (QColor(8, 8, 8, 160), 0, 1),
-            (QColor(8, 8, 8, 160), 0, -1),
-            (QColor(255, 255, 255, 110), 0, 0),
-        ):
-            painter.setPen(QPen(color, 1))
-            painter.drawRect(rect.adjusted(ox, oy, ox, oy))
+        pen = QPen(_REGION_COLOR, 1)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.drawRect(rect)
 
     def _paint_readout(self, painter):
         """Draw the crosshair and (X, Y) readout at the hover position.
