@@ -57,7 +57,6 @@ class TrayIcon(QObject):
         self._window = window
         self._tray = QSystemTrayIcon(make_icon(), self)
         self._menu = QMenu()
-        self._menu.setParent(self)
 
         self._toggle_action = QAction("Show / Hide", self)
         self._toggle_action.triggered.connect(self._window.toggle_visibility)
