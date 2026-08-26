@@ -105,6 +105,26 @@ def _local_point(window, lparam):
     return window.mapFromGlobal(logical)
 
 
+def window_rect(window):
+    """Return the window's on-screen rect in physical pixels, or None.
+
+    Uses GetWindowRect, which reports the actual displayed bounds. This
+    matters for a maximized or aero-snapped window, where Qt's geometry()
+    returns the pre-snap "restore" rect rather than where the window is
+    really sitting on screen.
+    """
+    if wintypes is None:
+        return None
+    try:
+        hwnd = int(window.winId())
+        rect = wintypes.RECT()
+        if not ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            return None
+        return rect.left, rect.top, rect.right, rect.bottom
+    except Exception:
+        return None
+
+
 def apply_native_overlapped_style(window):
     """Give the window real overlapped-window styles for snapping.
 

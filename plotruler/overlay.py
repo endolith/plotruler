@@ -209,12 +209,21 @@ class OverlayWindow(QWidget):
     def toggle_visibility(self):
         """Show the overlay if hidden, or hide it if visible."""
         if self.isVisible():
-            # Save the exact screen rect before hiding. Restoring the window
-            # state is not enough: Aero Snap repositions the window but
-            # windowState() only reports a general "maximized", so re-showing
-            # would fill the screen instead of the snap slot. The recorded
-            # geometry pins it back to the snapped spot.
-            self._pre_hide_geometry = self.geometry()
+            # Save the exact on-screen rect before hiding. Qt's geometry()
+            # returns the pre-snap "restore" bounds for a snapped window,
+            # so we read the true displayed rect from Win32 instead. Stored
+            # as physical (left, top, right, bottom).
+            rect = win_hittest.window_rect(self)
+            if rect is None:
+                g = self.geometry()
+                dpr = self.devicePixelRatioF()
+                rect = (
+                    int(g.x() * dpr),
+                    int(g.y() * dpr),
+                    int((g.x() + g.width()) * dpr),
+                    int((g.y() + g.height()) * dpr),
+                )
+            self._pre_hide_geometry = rect
             self.hide()
         else:
             self.show()
@@ -222,11 +231,22 @@ class OverlayWindow(QWidget):
             if saved is not None:
                 # Drop any maximized state so the geometry rect is honored.
                 self.setWindowState(Qt.WindowState.WindowNoState)
-                self.setGeometry(saved)
+                self.setGeometry(self._physical_rect_to_logical(saved))
                 self._pre_hide_geometry = None
             self._maximized = self.isMaximized()
             self.raise_()
             self.activateWindow()
+
+    def _physical_rect_to_logical(self, rect):
+        """Convert a physical (left, top, right, bottom) rect to a QRect."""
+        left, top, right, bottom = rect
+        dpr = self.devicePixelRatioF()
+        return QRect(
+            int(left / dpr),
+            int(top / dpr),
+            int((right - left) / dpr),
+            int((bottom - top) / dpr),
+        )
 
     def close_app(self):
         QApplication.quit()
