@@ -699,17 +699,23 @@ class OverlayWindow(QWidget):
 
         The rectangle is anchored to absolute screen coordinates, not the
         window, so if the graph underneath is moved the box stays where it
-        was calibrated and the misalignment is easy to spot. Dashed so it
-        reads as a guide and does not compete with the graph.
+        was calibrated and the misalignment is easy to spot. It gets the
+        same treatment as the readout crosshair: a dark underline beneath
+        a light line so it reads clearly on any content.
         """
         left, top, right, bottom = self._calibration.region()
         p0 = self._local_from_physical(left, top)
         p1 = self._local_from_physical(right, bottom)
         rect = QRect(p0, p1)
-        pen = QPen(QColor(255, 255, 255, 120), 1)
-        pen.setStyle(Qt.PenStyle.DashLine)
-        painter.setPen(pen)
-        painter.drawRect(rect)
+        for color, ox, oy in (
+            (QColor(8, 8, 8, 160), 1, 0),
+            (QColor(8, 8, 8, 160), -1, 0),
+            (QColor(8, 8, 8, 160), 0, 1),
+            (QColor(8, 8, 8, 160), 0, -1),
+            (QColor(255, 255, 255, 110), 0, 0),
+        ):
+            painter.setPen(QPen(color, 1))
+            painter.drawRect(rect.adjusted(ox, oy, ox, oy))
 
     def _paint_readout(self, painter):
         """Draw the crosshair and (X, Y) readout at the hover position.
