@@ -209,18 +209,21 @@ class OverlayWindow(QWidget):
     def toggle_visibility(self):
         """Show the overlay if hidden, or hide it if visible."""
         if self.isVisible():
-            # Remember the window state before hiding so that a re-shown
-            # maximized/snapped window does not come back at its normal
-            # (pre-snap) size.
-            self._pre_hide_state = self.windowState()
+            # Save the exact screen rect before hiding. Restoring the window
+            # state is not enough: Aero Snap repositions the window but
+            # windowState() only reports a general "maximized", so re-showing
+            # would fill the screen instead of the snap slot. The recorded
+            # geometry pins it back to the snapped spot.
+            self._pre_hide_geometry = self.geometry()
             self.hide()
         else:
             self.show()
-            state = getattr(
-                self, "_pre_hide_state", Qt.WindowState.WindowNoState
-            )
-            if state & Qt.WindowState.WindowMaximized:
-                self.setWindowState(state)
+            saved = getattr(self, "_pre_hide_geometry", None)
+            if saved is not None:
+                # Drop any maximized state so the geometry rect is honored.
+                self.setWindowState(Qt.WindowState.WindowNoState)
+                self.setGeometry(saved)
+                self._pre_hide_geometry = None
             self._maximized = self.isMaximized()
             self.raise_()
             self.activateWindow()
