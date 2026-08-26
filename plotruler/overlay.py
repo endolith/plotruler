@@ -538,13 +538,15 @@ class OverlayWindow(QWidget):
         metrics = QFontMetricsF(font)
         height = metrics.height()
         baseline = pos.y() + height / 2
-        # Dark halo: draw the text offset around the glyph, including the
-        # diagonals, then the colored glyph on top. This reads as a soft
-        # outline, not a box, and stays legible on light or dark content.
+        # Dark halo: draw the text offset in a ring around the glyph, then
+        # the colored glyph on top. Offsets are symmetric on all four
+        # sides so the outline reads evenly, not just left and right. This
+        # reads as a soft outline, not a box, and stays legible on light
+        # or dark content.
         halo_color = QColor(8, 8, 8, 220)
         painter.setPen(halo_color)
         for dx in (-2, -1, 0, 1, 2):
-            for dy in (-1, 0, 1):
+            for dy in (-2, -1, 0, 1, 2):
                 if dx == 0 and dy == 0:
                     continue
                 painter.drawText(QPointF(pos.x() + dx, baseline + dy), text)
