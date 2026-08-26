@@ -206,6 +206,15 @@ class OverlayWindow(QWidget):
         """Hide the overlay; the app stays resident in the tray."""
         self.hide()
 
+    def toggle_visibility(self):
+        """Show the overlay if hidden, or hide it if visible."""
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+
     def close_app(self):
         QApplication.quit()
 
