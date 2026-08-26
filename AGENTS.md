@@ -40,6 +40,7 @@ ruff format .              # auto-format
 
 - pytest covers the math (`tests/test_*.py`). Every test function needs a docstring stating what behavior it verifies and why. New functions get tests; bug fixes get regression tests.
 - The GUI is **not unit-tested** — translucent always-on-top overlays are interaction- heavy and don't test well without a running event loop. Keep widgets thin (logic in testable functions), and verify the GUI by running it. pytest-qt can be added later if a real need shows up.
+- Give testing instructions to the user *before* running the program. 
 
 ## Hotkey
 
