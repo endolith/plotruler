@@ -18,7 +18,15 @@ Set PLOTRULER_DEBUG=1 to log window state and native events to stderr.
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QStandardPaths, Qt, QTimer
+from PySide6.QtCore import (
+    QEvent,
+    QPoint,
+    QPointF,
+    QRect,
+    QStandardPaths,
+    Qt,
+    QTimer,
+)
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -504,6 +512,7 @@ class OverlayWindow(QWidget):
         painter.setPen(QPen(QColor(255, 90, 90, 240), 2))
         painter.drawRect(self.rect().adjusted(1, 1, -2, -2))
         if self._calibration is not None:
+            self._paint_calibration_region(painter)
             self._paint_readout(painter)
         if self._session is not None:
             self._paint_calibration(painter)
@@ -684,6 +693,23 @@ class OverlayWindow(QWidget):
                 QPointF(caret_x, baseline - 7),
                 QPointF(caret_x, baseline + 7),
             )
+
+    def _paint_calibration_region(self, painter):
+        """Draw the calibrated screen region as a guide rectangle.
+
+        The rectangle is anchored to absolute screen coordinates, not the
+        window, so if the graph underneath is moved the box stays where it
+        was calibrated and the misalignment is easy to spot. Dashed so it
+        reads as a guide and does not compete with the graph.
+        """
+        left, top, right, bottom = self._calibration.region()
+        p0 = self._local_from_physical(left, top)
+        p1 = self._local_from_physical(right, bottom)
+        rect = QRect(p0, p1)
+        pen = QPen(QColor(255, 255, 255, 120), 1)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.drawRect(rect)
 
     def _paint_readout(self, painter):
         """Draw the crosshair and (X, Y) readout at the hover position.

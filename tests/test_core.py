@@ -56,6 +56,22 @@ def test_xy_combines_both_axes():
     assert cal.xy(100, 200) == pytest.approx((0.0, 0.0))
 
 
+def test_region_bounds_ignore_click_order():
+    """region() must span the calibrated pixels regardless of the order
+    the anchors were clicked, so the guide box always encloses the graph."""
+    forward = Calibration(
+        AxisCalibration(100, 0, 400, 10),
+        AxisCalibration(200, 20, 50, 0),
+    )
+    assert forward.region() == (100, 50, 400, 200)
+    # Same anchors, reversed on both axes: identical bounds.
+    reversed_ = Calibration(
+        AxisCalibration(400, 10, 100, 0),
+        AxisCalibration(50, 0, 200, 20),
+    )
+    assert reversed_.region() == forward.region()
+
+
 def test_degenerate_axis_raises():
     """Clicking the same coordinate for both anchors is a user error with
     no defined line; it must be rejected loudly, not divide by zero."""

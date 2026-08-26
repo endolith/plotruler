@@ -78,6 +78,18 @@ class Calibration:
         """Return the (x, y) data values at the screen point (px, py)."""
         return self.x.value(px), self.y.value(py)
 
+    def region(self):
+        """Return the calibrated pixel bounds as (left, top, right, bottom).
+
+        The X anchors give the horizontal extent and the Y anchors the
+        vertical extent, so the calibrated region is the rectangle between
+        them regardless of the order the anchors were clicked. The overlay
+        draws this as a guide so a misaligned graph underneath is noticed.
+        """
+        top, bottom = sorted((self.y.p1, self.y.p2))
+        left, right = sorted((self.x.p1, self.x.p2))
+        return left, top, right, bottom
+
     def __repr__(self):
         return f"Calibration(x={self.x}, y={self.y})"
 
