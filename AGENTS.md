@@ -4,7 +4,7 @@ PlotRuler is a **cross-platform** desktop overlay for reading (X, Y) values off 
 
 The graph itself is **never rendered by PlotRuler** — it is whatever other app is on screen underneath the overlay (a browser, a PDF viewer, a plotting window). PlotRuler is a **live translucent overlay** that sits on top and reads through it, not a screenshot/frozen-image workflow. Calibration persists to disk across sessions and across hide/show.
 
-Stack: Python 3.14 (conda env `plotruler`) · PySide6 6.11.2 (Qt) · pytest. The app is tray-resident; **Ctrl+Alt+Space** toggles the overlay.
+Stack: Python 3.14 (conda env `plotruler`) · PySide6 6.11.2 (Qt) · pytest. The app is tray-resident; **Win+Alt+P** toggles the overlay.
 
 ## Quick commands
 
