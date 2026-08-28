@@ -7,8 +7,8 @@ image asset is needed) and wires a small context menu: show/hide, start a
 new calibration, and quit.
 """
 
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt
+from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 # Accent colors matching the overlay so the tray icon feels consistent.
@@ -27,6 +27,11 @@ def make_icon():
     two arms are the app's X/Y accent colors. The crosshair is the focal
     point so the icon still reads as 'measure a point on a graph' at the
     tiny size Windows tray icons render.
+
+    Everything is drawn on even pixel coordinates with integer rects so
+    the icon downsamples symmetrically: the crosshair sits at the tile's
+    center (32,32) and each arm is exactly 4px thick, so at 16px the two
+    arms land on the same 1-pixel column/row and stay equally bright.
     """
     size = 64
     pixmap = QPixmap(size, size)
@@ -40,28 +45,28 @@ def make_icon():
     painter.setBrush(_TRAY_RED_BG)
     painter.drawRoundedRect(QRectF(0, 0, size, size), 14, 14)
 
-    # Graph axes: a light L along the bottom and left.
-    pen = QPen(_LIGHT, 4)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    painter.setPen(pen)
-    painter.drawLine(QPointF(10, 54), QPointF(54, 54))  # x-axis
-    painter.drawLine(QPointF(10, 54), QPointF(10, 10))  # y-axis
-
-    # Crosshair at the graph's focal point, arms in the accent colors.
-    cx, cy = 36, 30
-    pen = QPen(_ICON_CYAN, 4)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    painter.setPen(pen)
-    painter.drawLine(QPointF(cx - 10, cy), QPointF(cx + 10, cy))  # X arm
-    pen = QPen(_AMBER, 4)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    painter.setPen(pen)
-    painter.drawLine(QPointF(cx, cy - 10), QPointF(cx, cy + 10))  # Y arm
-
-    # A small center dot so the crosshair reads as one target.
+    # Graph axes: a light L along the bottom and left. Rects are
+    # integer-aligned and 4px thick, symmetric about their center.
     painter.setPen(Qt.PenStyle.NoPen)
+    painter.fillRect(QRect(8, 52, 48, 4), _LIGHT)  # x-axis (horizontal)
+    painter.fillRect(QRect(8, 8, 4, 48), _LIGHT)  # y-axis (vertical)
+
+    # Crosshair arms: identical 4px-thick integer rects, centered on the
+    # tile's midpoint so the vertical does not straddle a half-pixel.
+    thickness = 4
+    half = 10
+    t2 = thickness // 2
+    cx = cy = size // 2  # 32, 32
+    painter.fillRect(
+        QRect(cx - half, cy - t2, half * 2, thickness), _ICON_CYAN
+    )  # X arm (horizontal)
+    painter.fillRect(
+        QRect(cx - t2, cy - half, thickness, half * 2), _AMBER
+    )  # Y arm (vertical)
+
+    # A small light center dot so the crosshair reads as one target.
     painter.setBrush(_LIGHT)
-    painter.drawEllipse(QPointF(cx, cy), 2.5, 2.5)
+    painter.drawEllipse(QPointF(cx, cy), 2.0, 2.0)
 
     painter.end()
     return QIcon(pixmap)
