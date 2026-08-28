@@ -89,8 +89,10 @@ def test_qkey_to_vk_rejects_unknown_special():
 
 def test_qmodifiers_to_names_maps_meta_to_win():
     """Qt's Meta modifier (the Windows key) must map to the 'win' name."""
-    assert hotkey.qmodifiers_to_names(0x00000008 | 0x00000004) == [
-        "win",
-        "alt",
-    ]
-    assert hotkey.qmodifiers_to_names(0x00000001) == ["shift"]
+    from PySide6.QtCore import Qt
+
+    flags = Qt.KeyboardModifier
+    assert hotkey.qmodifiers_to_names(
+        flags.MetaModifier | flags.AltModifier
+    ) == ["win", "alt"]
+    assert hotkey.qmodifiers_to_names(flags.ShiftModifier) == ["shift"]

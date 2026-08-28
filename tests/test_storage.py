@@ -50,6 +50,20 @@ def test_save_preserves_preexisting_fields(tmp_path):
     assert storage.calibration(path) is not None
 
 
+def test_save_and_load_hotkey(tmp_path):
+    """A hotkey dict must round-trip through save() and hotkey()."""
+    path = os.path.join(tmp_path, "settings.json")
+    combo = {"modifiers": ["win", "alt"], "key": "P", "vk": 80}
+    storage.save(path, hotkey=combo)
+    assert storage.hotkey(path) == combo
+
+
+def test_missing_hotkey_returns_none(tmp_path):
+    """A file without a hotkey entry must yield None, not raise."""
+    path = os.path.join(tmp_path, "settings.json")
+    assert storage.hotkey(path) is None
+
+
 def test_missing_file_returns_empty(tmp_path):
     """A missing config file must yield an empty dict and None values, not
     raise, so a first run starts cleanly."""

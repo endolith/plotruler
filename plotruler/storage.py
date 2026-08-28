@@ -77,8 +77,8 @@ def load(path):
     return data
 
 
-def save(path, geometry=None, calibration=None):
-    """Write geometry and/or calibration to the config file.
+def save(path, geometry=None, calibration=None, hotkey=None):
+    """Write geometry, calibration, and/or hotkey to the config file.
 
     Existing values not being updated are preserved, so callers only need
     to pass the fields they changed. Missing keys just keep their old
@@ -89,6 +89,8 @@ def save(path, geometry=None, calibration=None):
         data["geometry"] = geometry
     if calibration is not None:
         data["calibration"] = calibration_to_dict(calibration)
+    if hotkey is not None:
+        data["hotkey"] = hotkey
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
@@ -99,6 +101,12 @@ def save(path, geometry=None, calibration=None):
 def calibration(path):
     """Return the saved Calibration, or None."""
     return calibration_from_dict(load(path).get("calibration"))
+
+
+def hotkey(path):
+    """Return the saved hotkey config dict, or None."""
+    value = load(path).get("hotkey")
+    return value if isinstance(value, dict) else None
 
 
 def geometry(path):

@@ -7,9 +7,18 @@ import traceback
 
 from PySide6.QtWidgets import QApplication
 
-from .hotkey import GlobalHotkey
-from .overlay import OverlayWindow
+from . import storage
+from .hotkey import DEFAULT_COMBO, GlobalHotkey, combo_from_dict
+from .overlay import OverlayWindow, _config_path
+from .settings import HotkeyDialog
 from .tray import TrayIcon
+
+
+def _load_hotkey():
+    """Return the saved key combo, or the default if none is stored."""
+    saved = storage.hotkey(_config_path())
+    combo = combo_from_dict(saved) if saved else None
+    return combo or DEFAULT_COMBO
 
 
 def _crash_log_path():
@@ -53,11 +62,30 @@ def main():
 
     window = OverlayWindow()
 
+    config_path = _config_path()
+
+    def change_hotkey():
+        current = _load_hotkey()
+        dialog = HotkeyDialog(current=current)
+        if dialog.exec():
+            new_combo = dialog.combo()
+            if new_combo is not None:
+                if hotkey.set_combo(new_combo):
+                    storage.save(config_path, hotkey=new_combo.to_dict())
+                else:
+                    # The new key is already in use (RegisterHotKey failed);
+                    # tell the user and leave the old hotkey registered.
+                    print(
+                        "Could not register "
+                        + new_combo.text()
+                        + "; it may already be in use."
+                    )
+
     # Parent the tray to the window so it lives as long as the app does.
-    TrayIcon(window, parent=window)
+    TrayIcon(window, on_change_hotkey=change_hotkey, parent=window)
     app.setQuitOnLastWindowClosed(False)  # stay resident in the tray
 
-    hotkey = GlobalHotkey(callback=window.toggle_visibility)
+    hotkey = GlobalHotkey(_load_hotkey(), callback=window.toggle_visibility)
     hotkey.register()
     app.installNativeEventFilter(hotkey)
     app.aboutToQuit.connect(hotkey.unregister)

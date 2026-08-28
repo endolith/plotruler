@@ -147,16 +147,26 @@ def qkey_to_vk(qt_key):
 
 
 def qmodifiers_to_names(qt_modifiers):
-    """Convert a Qt.KeyboardModifier bitmask to modifier names."""
+    """Convert a Qt.KeyboardModifier bitmask to modifier names.
+
+    Accepts either a KeyboardModifier flag (from a QKeyEvent) or a plain
+    int bitmask, since the two come back differently through the bindings.
+    Qt5 and Qt6 use different modifier bit values, so we match against the
+    flag enums rather than raw ints.
+    """
+    from PySide6.QtCore import Qt
+
+    flags = Qt.KeyboardModifier
+    value = getattr(qt_modifiers, "value", qt_modifiers)
     names = []
     # The Windows key appears to Qt as the Meta modifier.
-    if qt_modifiers & 0x00000008:
+    if value & flags.MetaModifier.value:
         names.append("win")
-    if qt_modifiers & 0x00000004:
+    if value & flags.AltModifier.value:
         names.append("alt")
-    if qt_modifiers & 0x00000002:
+    if value & flags.ControlModifier.value:
         names.append("ctrl")
-    if qt_modifiers & 0x00000001:
+    if value & flags.ShiftModifier.value:
         names.append("shift")
     return names
 
@@ -168,12 +178,9 @@ class GlobalHotkey(QAbstractNativeEventFilter):
     event filter, so it is safe to manipulate widgets directly.
     """
 
-    def __init__(
-        self, key=DEFAULT_VK, modifiers=DEFAULT_MODIFIERS, callback=None
-    ):
+    def __init__(self, combo, callback=None):
         super().__init__()
-        self._key = key
-        self._modifiers = modifiers
+        self._combo = combo
         self._callback = callback
         self._hotkey_id = 0xBEEF
         self._registered = False
@@ -185,7 +192,10 @@ class GlobalHotkey(QAbstractNativeEventFilter):
         if self._registered:
             return True
         result = ctypes.windll.user32.RegisterHotKey(
-            None, self._hotkey_id, self._modifiers, self._key
+            None,
+            self._hotkey_id,
+            self._combo.win32_modifiers(),
+            self._combo.vk,
         )
         self._registered = bool(result)
         return self._registered
@@ -198,6 +208,16 @@ class GlobalHotkey(QAbstractNativeEventFilter):
 
     def set_callback(self, callback):
         self._callback = callback
+
+    def set_combo(self, combo):
+        """Swap the registered key for a new combo.
+
+        Unregisters the old hotkey, registers the new one, and returns the
+        new registration result.
+        """
+        self.unregister()
+        self._combo = combo
+        return self.register()
 
     def nativeEventFilter(self, event_type, message):
         if wintypes is None or event_type != b"windows_generic_MSG":

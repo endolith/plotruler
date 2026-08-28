@@ -52,9 +52,10 @@ def make_icon():
 class TrayIcon(QObject):
     """Owns the system tray icon and its menu, tied to the overlay window."""
 
-    def __init__(self, window, parent=None):
+    def __init__(self, window, on_change_hotkey=None, parent=None):
         super().__init__(parent)
         self._window = window
+        self._on_change_hotkey = on_change_hotkey
         self._tray = QSystemTrayIcon(make_icon(), self)
         self._menu = QMenu()
 
@@ -62,12 +63,15 @@ class TrayIcon(QObject):
         self._toggle_action.triggered.connect(self._window.toggle_visibility)
         self._new_action = QAction("New Calibration", self)
         self._new_action.triggered.connect(self._start_calibration)
+        self._hotkey_action = QAction("Change Hotkey…", self)
+        self._hotkey_action.triggered.connect(self._change_hotkey)
         self._quit_action = QAction("Quit", self)
         self._quit_action.triggered.connect(self._quit)
 
         self._menu.addAction(self._toggle_action)
         self._menu.addSeparator()
         self._menu.addAction(self._new_action)
+        self._menu.addAction(self._hotkey_action)
         self._menu.addSeparator()
         self._menu.addAction(self._quit_action)
 
@@ -75,6 +79,10 @@ class TrayIcon(QObject):
         self._tray.setToolTip("PlotRuler")
         self._tray.activated.connect(self._on_activated)
         self._tray.show()
+
+    def _change_hotkey(self):
+        if self._on_change_hotkey is not None:
+            self._on_change_hotkey()
 
     def _start_calibration(self):
         self._window.show()
