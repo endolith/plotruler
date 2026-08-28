@@ -5,4 +5,8 @@ __pycache__/
 .venv/
 dist/
 build/
+!build/plotruler.spec
+!build/entry.py
+!build/make_ico.py
+!build/plotruler.ico
 *.egg-info/

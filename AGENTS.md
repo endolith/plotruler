@@ -14,6 +14,7 @@ python -m plotruler        # run the app
 pytest                     # run tests
 ruff check .               # lint
 ruff format .              # auto-format
+python build/build.py      # build dist/PlotRuler.exe (requires pyinstaller)
 ```
 
 ## Environment

@@ -14,6 +14,17 @@ ruff check .               # lint
 ruff format .              # auto-format
 ```
 
+## Build a stand-alone executable
+
+```sh
+python -m pip install pyinstaller
+python build/build.py
+```
+
+Produces a single-file, windowed `dist/PlotRuler.exe` with a tray icon and
+version metadata. The app bundles Qt, so the exe is large (~250 MB) but needs
+no Python install to run.
+
 See `AGENTS.md` for development conventions.
 
 ## License

@@ -20,7 +20,7 @@ _AMBER = QColor(255, 200, 80)
 _LIGHT = QColor(235, 235, 235)
 
 
-def make_icon():
+def make_icon(size=64):
     """Build a PlotRuler tray icon.
 
     A dark rounded tile with a graph-axes L (light) and a crosshair whose
@@ -30,10 +30,14 @@ def make_icon():
 
     Everything is drawn on even pixel coordinates with integer rects so
     the icon downsamples symmetrically: the crosshair sits at the tile's
-    center (32,32) and each arm is exactly 4px thick, so at 16px the two
-    arms land on the same 1-pixel column/row and stay equally bright.
+    center and each arm is exactly 4px thick, so at 16px the two arms
+    land on the same 1-pixel column/row and stay equally bright.
+
+    `size` is the render canvas in pixels. The layout is tuned for 64px
+    and scaled up proportionally for other sizes (e.g. a high-res icon
+    for the packaged executable).
     """
-    size = 64
+    k = size // 64
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
 
@@ -43,23 +47,23 @@ def make_icon():
     # Dark rounded tile so the light strokes pop on the taskbar tray.
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(_TRAY_RED_BG)
-    painter.drawRoundedRect(QRectF(0, 0, size, size), 14, 14)
+    painter.drawRoundedRect(QRectF(0, 0, size, size), 14 * k, 14 * k)
 
     # Graph axes: a light L along the bottom and left. Rects are
     # integer-aligned and 4px thick, symmetric about their center.
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.fillRect(QRect(8, 52, 48, 4), _LIGHT)  # x-axis (horizontal)
-    painter.fillRect(QRect(8, 8, 4, 48), _LIGHT)  # y-axis (vertical)
+    painter.fillRect(QRect(8 * k, 52 * k, 48 * k, 4 * k), _LIGHT)  # x-axis
+    painter.fillRect(QRect(8 * k, 8 * k, 4 * k, 48 * k), _LIGHT)  # y-axis
 
     # Crosshair arms: identical 4px-thick integer rects. The center is at
     # 34 (not 32) because the 64->16 downsampler bins the canvas into 4x4
     # blocks; an arm centered on 32 spans rows 30-33 and straddles two bins,
     # lighting up two 16px rows. Centering on 34 (= 4*8 + 2) puts each arm
     # wholly inside one bin, so both arms are single symmetric pixels.
-    thickness = 4
-    half = 10
+    thickness = 4 * k
+    half = 10 * k
     t2 = thickness // 2
-    cx = cy = 34
+    cx = cy = 34 * k
     painter.fillRect(
         QRect(cx - half, cy - t2, half * 2, thickness), _ICON_CYAN
     )  # X arm (horizontal)
@@ -69,7 +73,7 @@ def make_icon():
 
     # A small light center dot so the crosshair reads as one target.
     painter.setBrush(_LIGHT)
-    painter.drawEllipse(QPointF(cx, cy), 2.0, 2.0)
+    painter.drawEllipse(QPointF(cx, cy), 2.0 * k, 2.0 * k)
 
     painter.end()
     return QIcon(pixmap)
