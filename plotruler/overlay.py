@@ -240,11 +240,12 @@ class OverlayWindow(QWidget):
             self.raise_()
             self.activateWindow()
 
-    def close_app(self):
-        # Defer quitting to the next event-loop pass so the window is not
-        # torn down in the middle of handling the mouse release. This also
-        # avoids the release falling through to the window underneath.
-        QTimer.singleShot(0, QApplication.quit)
+    def closeEvent(self, event):
+        # There is no close button; a WM_CLOSE (e.g. Alt+F4) should hide the
+        # overlay to the tray rather than end the app. Quitting is explicit,
+        # from the tray menu. Ignoring the event cancels the close.
+        event.ignore()
+        self.hide()
 
     def _restore_state(self):
         """Load the saved geometry and calibration, if any.

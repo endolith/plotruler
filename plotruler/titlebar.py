@@ -17,7 +17,6 @@ TITLEBAR_HEIGHT = 32
 _BUTTON_WIDTH = 40
 _GLYPH = QColor(220, 220, 220)
 _HOVER_BG = QColor(255, 255, 255, 36)
-_CLOSE_BG = QColor(232, 17, 35)
 
 
 class TitleBar(QWidget):
@@ -27,26 +26,22 @@ class TitleBar(QWidget):
         super().__init__(parent)
         self._min_rect = QRectF()
         self._max_rect = QRectF()
-        self._close_rect = QRectF()
         self._hover_button = None
         self._pressed_button = None
         self.setMouseTracking(True)
 
     def _layout(self):
         w = self.width()
-        self._close_rect = QRectF(
+        self._max_rect = QRectF(
             w - _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
         )
-        self._max_rect = QRectF(
-            w - 2 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
-        )
         self._min_rect = QRectF(
-            w - 3 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
+            w - 2 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
         )
 
     def is_over_buttons(self, pos):
         """True when a window-coordinate point hits a control button."""
-        for rect in (self._min_rect, self._max_rect, self._close_rect):
+        for rect in (self._min_rect, self._max_rect):
             if rect.contains(pos):
                 return True
         return False
@@ -55,7 +50,6 @@ class TitleBar(QWidget):
         for rect, name in (
             (self._min_rect, "min"),
             (self._max_rect, "max"),
-            (self._close_rect, "close"),
         ):
             if rect.contains(pos):
                 return name
@@ -82,7 +76,7 @@ class TitleBar(QWidget):
         painter.setPen(QColor(235, 235, 235))
         painter.drawText(
             QRectF(
-                10, 0, self.width() - 3 * _BUTTON_WIDTH - 20, self.height()
+                10, 0, self.width() - 2 * _BUTTON_WIDTH - 20, self.height()
             ),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             "PlotRuler",
@@ -90,7 +84,6 @@ class TitleBar(QWidget):
 
         self._draw_minimize(painter)
         self._draw_maximize(painter)
-        self._draw_close(painter)
 
     def _draw_minimize(self, painter):
         if self._hover_button == "min":
@@ -113,20 +106,6 @@ class TitleBar(QWidget):
             painter.drawRect(QRectF(rect.x() + 13, rect.y() + 9, 14, 14))
         else:
             painter.drawRect(QRectF(rect.x() + 12, rect.y() + 9, 16, 16))
-
-    def _draw_close(self, painter):
-        if self._hover_button == "close":
-            painter.fillRect(self._close_rect, _CLOSE_BG)
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        rect = self._close_rect
-        painter.drawLine(
-            QPointF(rect.x() + 13, rect.y() + 10),
-            QPointF(rect.right() - 13, rect.bottom() - 10),
-        )
-        painter.drawLine(
-            QPointF(rect.right() - 13, rect.y() + 10),
-            QPointF(rect.x() + 13, rect.bottom() - 10),
-        )
 
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
@@ -155,8 +134,6 @@ class TitleBar(QWidget):
             self.window().minimize_to_tray()
         elif button == "max":
             self.window().toggle_maximize()
-        elif button == "close":
-            self.window().close_app()
 
     def mouseMoveEvent(self, event):
         hover = self._button_at(event.position())
