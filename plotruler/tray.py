@@ -12,8 +12,10 @@ from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 # Accent colors matching the overlay so the tray icon feels consistent.
+# The icon cyan is brighter than the overlay's so the crosshair arms have
+# similar luminance (the amber Y-arm would otherwise outshine it).
 _TRAY_RED_BG = QColor(90, 30, 30)
-_CYAN = QColor(80, 200, 255)
+_ICON_CYAN = QColor(140, 230, 255)
 _AMBER = QColor(255, 200, 80)
 _LIGHT = QColor(235, 235, 235)
 
@@ -47,7 +49,7 @@ def make_icon():
 
     # Crosshair at the graph's focal point, arms in the accent colors.
     cx, cy = 36, 30
-    pen = QPen(_CYAN, 4)
+    pen = QPen(_ICON_CYAN, 4)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     painter.setPen(pen)
     painter.drawLine(QPointF(cx - 10, cy), QPointF(cx + 10, cy))  # X arm
