@@ -15,3 +15,9 @@ ruff format .              # auto-format
 ```
 
 See `AGENTS.md` for development conventions.
+
+## License
+
+MIT License (see `LICENSE`).
+
+(This was generated almost entirely by AI under human direction, so likely lacks the human authorship required for copyright in the US and is therefore in the public domain.  MIT license applies anywhere else.)
