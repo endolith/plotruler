@@ -1,12 +1,8 @@
 # PlotRuler
 
-A translucent desktop overlay for reading (X, Y) values off a graph shown on screen.
-Calibrate once against a known plot (click two points per axis, type their values), then
-hover to read coordinates and click to copy.
+A translucent desktop overlay for accurately reading (X, Y) values off a graph shown on screen. Calibrate once against the known plot coordinates (click at two points on each axis, and type their labeled values), then hover to read coordinates anywhere else, and click to copy.
 
-The graph itself is never rendered by PlotRuler — it is whatever other app is on screen
-underneath the overlay (a browser, a PDF viewer, a plotting window). PlotRuler is a live
-translucent overlay that reads through it, not a screenshot workflow.
+The graph itself is not rendered by PlotRuler — it is whatever other app is on screen underneath the overlay (a browser, a PDF viewer, a plotting window, etc.) PlotRuler is a live translucent overlay that reads through it, not a screenshot workflow.
 
 ## Development
 
