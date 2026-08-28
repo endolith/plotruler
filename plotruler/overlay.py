@@ -241,7 +241,10 @@ class OverlayWindow(QWidget):
             self.activateWindow()
 
     def close_app(self):
-        QApplication.quit()
+        # Defer quitting to the next event-loop pass so the window is not
+        # torn down in the middle of handling the mouse release. This also
+        # avoids the release falling through to the window underneath.
+        QTimer.singleShot(0, QApplication.quit)
 
     def _restore_state(self):
         """Load the saved geometry and calibration, if any.

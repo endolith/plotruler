@@ -29,6 +29,7 @@ class TitleBar(QWidget):
         self._max_rect = QRectF()
         self._close_rect = QRectF()
         self._hover_button = None
+        self._pressed_button = None
         self.setMouseTracking(True)
 
     def _layout(self):
@@ -130,7 +131,26 @@ class TitleBar(QWidget):
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return
+        # Remember which button was pressed, but do not act yet. Acting on
+        # press would let the button's release fall through to whatever
+        # window is underneath once we quit (see mouseReleaseEvent), which
+        # is how a click on PlotRuler's close button could also close the
+        # app beneath it.
+        self._pressed_button = self._button_at(event.position())
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        # Only act if the press began on the same button, so a click that
+        # starts elsewhere and ends here (or vice versa) does not fire.
         button = self._button_at(event.position())
+        if button != self._pressed_button:
+            self._pressed_button = None
+            event.accept()
+            return
+        self._pressed_button = None
+        event.accept()
         if button == "min":
             self.window().minimize_to_tray()
         elif button == "max":
