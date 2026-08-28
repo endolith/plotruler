@@ -51,12 +51,15 @@ def make_icon():
     painter.fillRect(QRect(8, 52, 48, 4), _LIGHT)  # x-axis (horizontal)
     painter.fillRect(QRect(8, 8, 4, 48), _LIGHT)  # y-axis (vertical)
 
-    # Crosshair arms: identical 4px-thick integer rects, centered on the
-    # tile's midpoint so the vertical does not straddle a half-pixel.
+    # Crosshair arms: identical 4px-thick integer rects. The center is at
+    # 34 (not 32) because the 64->16 downsampler bins the canvas into 4x4
+    # blocks; an arm centered on 32 spans rows 30-33 and straddles two bins,
+    # lighting up two 16px rows. Centering on 34 (= 4*8 + 2) puts each arm
+    # wholly inside one bin, so both arms are single symmetric pixels.
     thickness = 4
     half = 10
     t2 = thickness // 2
-    cx = cy = size // 2  # 32, 32
+    cx = cy = 34
     painter.fillRect(
         QRect(cx - half, cy - t2, half * 2, thickness), _ICON_CYAN
     )  # X arm (horizontal)
