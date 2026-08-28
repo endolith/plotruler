@@ -15,11 +15,17 @@ from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 _TRAY_RED_BG = QColor(90, 30, 30)
 _CYAN = QColor(80, 200, 255)
 _AMBER = QColor(255, 200, 80)
+_LIGHT = QColor(235, 235, 235)
 
 
 def make_icon():
-    """Build a PlotRuler tray icon: a translucent rounded square with a
-    stylized graph (axes plus a rising line) drawn in the app colors."""
+    """Build a PlotRuler tray icon.
+
+    A dark rounded tile with a graph-axes L (light) and a crosshair whose
+    two arms are the app's X/Y accent colors. The crosshair is the focal
+    point so the icon still reads as 'measure a point on a graph' at the
+    tiny size Windows tray icons render.
+    """
     size = 64
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -27,23 +33,33 @@ def make_icon():
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-    body = _TRAY_RED_BG
+    # Dark rounded tile so the light strokes pop on the taskbar tray.
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(body)
+    painter.setBrush(_TRAY_RED_BG)
     painter.drawRoundedRect(QRectF(0, 0, size, size), 14, 14)
 
-    # Axes.
-    pen = QPen(QColor(230, 230, 230), 3)
-    pen.setStyle(Qt.PenStyle.SolidLine)
+    # Graph axes: a light L along the bottom and left.
+    pen = QPen(_LIGHT, 4)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     painter.setPen(pen)
-    painter.drawLine(QPointF(18, 46), QPointF(44, 12))  # diagonal rising line
+    painter.drawLine(QPointF(10, 54), QPointF(54, 54))  # x-axis
+    painter.drawLine(QPointF(10, 54), QPointF(10, 10))  # y-axis
 
-    # Small data points along the line.
+    # Crosshair at the graph's focal point, arms in the accent colors.
+    cx, cy = 36, 30
+    pen = QPen(_CYAN, 4)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    painter.setPen(pen)
+    painter.drawLine(QPointF(cx - 10, cy), QPointF(cx + 10, cy))  # X arm
+    pen = QPen(_AMBER, 4)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    painter.setPen(pen)
+    painter.drawLine(QPointF(cx, cy - 10), QPointF(cx, cy + 10))  # Y arm
+
+    # A small center dot so the crosshair reads as one target.
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(_CYAN)
-    painter.drawEllipse(QPointF(22, 42), 2.5, 2.5)
-    painter.setBrush(_AMBER)
-    painter.drawEllipse(QPointF(40, 16), 2.5, 2.5)
+    painter.setBrush(_LIGHT)
+    painter.drawEllipse(QPointF(cx, cy), 2.5, 2.5)
 
     painter.end()
     return QIcon(pixmap)
