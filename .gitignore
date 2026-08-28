@@ -4,9 +4,11 @@ __pycache__/
 .ruff_cache/
 .venv/
 dist/
-build/
-!build/plotruler.spec
-!build/entry.py
-!build/make_ico.py
-!build/plotruler.ico
+# PyInstaller work dir and its generated artifacts live under build/; keep
+# the source (spec, entry, icon, version info) tracked.
+build/plotruler/
+build/__pycache__/
+build/*.toc
+build/*.pkg
+build/*.zip
 *.egg-info/
