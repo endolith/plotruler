@@ -41,8 +41,13 @@ from .core import CalibrationSession
 from .format import AUTO, NAMES, OPTIONS, is_valid
 from .titlebar import TITLEBAR_HEIGHT, TitleBar
 
-# Width of the invisible edge hit-zones, in logical pixels.
+# Padding for text laid out at the window edges, in logical pixels.
 _EDGE = 8
+
+# Width of the invisible resize hit-zones along each border. Larger than
+# the text padding so a cursor near the edge reliably grabs a resize grip
+# rather than falling through to the graph underneath.
+_RESIZE_ZONE = 14
 
 # Anchor marker colors: X on one hue, Y on another, both chosen to read
 # against dark and light graph content.
@@ -546,21 +551,21 @@ class OverlayWindow(QWidget):
         x, y = local.x(), local.y()
         if not self.rect().contains(local):
             return win_hittest.HTCLIENT
-        if x < _EDGE and y < _EDGE:
+        if x < _RESIZE_ZONE and y < _RESIZE_ZONE:
             return win_hittest.HTTOPLEFT
-        if x >= w - _EDGE and y < _EDGE:
+        if x >= w - _RESIZE_ZONE and y < _RESIZE_ZONE:
             return win_hittest.HTTOPRIGHT
-        if x < _EDGE and y >= h - _EDGE:
+        if x < _RESIZE_ZONE and y >= h - _RESIZE_ZONE:
             return win_hittest.HTBOTTOMLEFT
-        if x >= w - _EDGE and y >= h - _EDGE:
+        if x >= w - _RESIZE_ZONE and y >= h - _RESIZE_ZONE:
             return win_hittest.HTBOTTOMRIGHT
-        if y < _EDGE:
+        if y < _RESIZE_ZONE:
             return win_hittest.HTTOP
-        if y >= h - _EDGE:
+        if y >= h - _RESIZE_ZONE:
             return win_hittest.HTBOTTOM
-        if x < _EDGE:
+        if x < _RESIZE_ZONE:
             return win_hittest.HTLEFT
-        if x >= w - _EDGE:
+        if x >= w - _RESIZE_ZONE:
             return win_hittest.HTRIGHT
         if y < TITLEBAR_HEIGHT:
             if self.title_bar.is_over_buttons(local):
