@@ -22,8 +22,8 @@ python build/build.py
 ```
 
 Produces a single-file, windowed `dist/PlotRuler.exe` with a tray icon and
-version metadata. The app bundles Qt, so the exe is large (~250 MB) but needs
-no Python install to run.
+version metadata. The app bundles Qt, so the exe is ~46 MB but needs no
+Python install to run.
 
 See `AGENTS.md` for development conventions.
 
