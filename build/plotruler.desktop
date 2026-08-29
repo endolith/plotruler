@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PlotRuler
+Comment=Read (X, Y) values off an on-screen graph with a translucent overlay
+Exec=plotruler
+Icon=plotruler
+Terminal=false
+Categories=Utilities;Science;
+# A translucent always-on-top overlay used for reading values off a graph.
+StartupNotify=false

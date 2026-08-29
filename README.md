@@ -14,6 +14,31 @@ ruff check .               # lint
 ruff format .              # auto-format
 ```
 
+## Linux
+
+Linux requires an X11 session; Wayland support is deferred (see `LINUX_PLAN.md`).
+Qt 6.5+ also needs the `xcb-cursor` system library for the X11 backend, which
+pip cannot install:
+
+```sh
+# Debian / Ubuntu
+sudo apt install libxcb-cursor0
+# Fedora / RHEL
+sudo dnf install xcb-util-cursor
+# Arch
+sudo pacman -S xcb-util-cursor
+```
+
+Install and run (no frozen binary on Linux):
+
+```sh
+./build/install_linux.sh    # or: pip install -e . then plotruler
+plotruler
+```
+
+The global hotkey (Win+Alt+P) is Windows-only for now; use the tray icon to
+show/hide the overlay.
+
 ## Build a stand-alone executable
 
 ```sh
