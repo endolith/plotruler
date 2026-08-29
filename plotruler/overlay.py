@@ -55,6 +55,15 @@ _RESIZE_ZONE = 14
 _INSTRUCTION_BOTTOM_GAP = 96
 _INSTRUCTION_ROW_H = 26
 
+# Font sizes, one consistent scale across the overlay. Headline text (the
+# calibration prompt, the typed value, the hovered readout) is TEXT_LARGE;
+# secondary labels (mode buttons, hints, errors, anchor labels) are
+# TEXT_MEDIUM; tertiary captions (format indicator, transient notices) are
+# TEXT_SMALL. Everything uses one of these so the type reads uniformly.
+_TEXT_LARGE = 14
+_TEXT_MEDIUM = 12
+_TEXT_SMALL = 10
+
 # Anchor marker colors: X on one hue, Y on another, both chosen to read
 # against dark and light graph content.
 _X_COLOR = QColor(80, 200, 255)
@@ -745,7 +754,7 @@ class OverlayWindow(QWidget):
             text,
             QPointF(local.x() + 10, local.y()),
             color,
-            9,
+            _TEXT_MEDIUM,
             bold=True,
         )
 
@@ -834,7 +843,7 @@ class OverlayWindow(QWidget):
             prompt,
             QPointF(left, top + line * _INSTRUCTION_ROW_H),
             title_color,
-            14,
+            _TEXT_LARGE,
             bold=True,
         )
         line += 1
@@ -852,7 +861,7 @@ class OverlayWindow(QWidget):
                 self._value_error,
                 QPointF(left, top + line * _INSTRUCTION_ROW_H),
                 QColor(255, 130, 130),
-                10,
+                _TEXT_MEDIUM,
                 bold=False,
             )
             line += 1
@@ -867,7 +876,7 @@ class OverlayWindow(QWidget):
             hint_text,
             QPointF(left + width - 220, top + line * _INSTRUCTION_ROW_H),
             QColor(210, 210, 210),
-            10,
+            _TEXT_MEDIUM,
             bold=False,
         )
 
@@ -878,12 +887,12 @@ class OverlayWindow(QWidget):
             self._value_text or " ",
             QPointF(left, top),
             QColor(255, 255, 255),
-            14,
+            _TEXT_LARGE,
             bold=True,
         )
         if self._caret_visible:
             font = QFont()
-            font.setPointSize(14)
+            font.setPointSize(_TEXT_LARGE)
             font.setBold(True)
             painter.setFont(font)
             metrics = QFontMetricsF(font)
@@ -933,7 +942,7 @@ class OverlayWindow(QWidget):
             label,
             QPointF(rect.center().x(), rect.center().y()),
             QColor(240, 240, 240),
-            12,
+            _TEXT_MEDIUM,
             bold=True,
             centered=True,
         )
@@ -999,7 +1008,7 @@ class OverlayWindow(QWidget):
             readout,
             QPointF(x + 14, y + 14),
             QColor(255, 255, 255),
-            11,
+            _TEXT_LARGE,
             bold=True,
         )
         # A small indicator showing the active number format and the number
@@ -1016,18 +1025,18 @@ class OverlayWindow(QWidget):
         self._draw_outlined_text(
             painter,
             info,
-            QPointF(x + 14, y + 34),
+            QPointF(x + 14, y + 40),
             QColor(200, 200, 200),
-            9,
+            _TEXT_SMALL,
             bold=False,
         )
         if self._copy_notice:
             self._draw_outlined_text(
                 painter,
                 self._copy_notice,
-                QPointF(x + 14, y + 50),
+                QPointF(x + 14, y + 64),
                 QColor(140, 230, 150),
-                9,
+                _TEXT_SMALL,
                 bold=False,
             )
 
