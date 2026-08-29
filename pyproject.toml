@@ -26,6 +26,14 @@ packages = ["plotruler"]
 target-version = "py314"
 line-length = 79
 
+[tool.ruff.format]
+# Match the project's plain-style code: double quotes, no magic trailing
+# comma (the owner prefers a reader-followable style). These pins make the
+# formatter output stable across runs so it does not churn existing code.
+quote-style = "double"
+indent-style = "space"
+preview = false
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
 
