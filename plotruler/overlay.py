@@ -117,6 +117,7 @@ class OverlayWindow(QWidget):
         # and a transient "copied" banner that fades after a short delay.
         self._hover_pos = QPoint()
         self._hover_active = False
+        self._hover_mode = None
         self._copy_notice = ""
         self._copy_timer = QTimer(self)
         self._copy_timer.setSingleShot(True)
@@ -286,6 +287,7 @@ class OverlayWindow(QWidget):
         self._caret_visible = True
         self._copy_notice = ""
         self._hover_active = False
+        self._hover_mode = None
         if not self._blink_timer.isActive():
             self._blink_timer.start()
         self.activateWindow()
@@ -370,21 +372,32 @@ class OverlayWindow(QWidget):
         self._value_text = ""
         self._value_error = None
         self._session.record_value(value)
+        self._maybe_finish_calibration()
+        self.update()
+
+    def _maybe_finish_calibration(self):
+        """Promote the session's calibration to the active one, if complete.
+
+        The session is only a scaffold for collecting anchors; once a
+        Calibration exists (every axis has its values and a scale mode), we
+        switch to readout mode. Keeping the session around would suppress
+        the hover readout, so drop it.
+        """
         calibration = self._session.calibration()
         if calibration is not None:
-            # Calibration is complete: switch to readout mode. The session
-            # was only a scaffold for collecting anchors; once we have a
-            # Calibration we no longer need it, and keeping it would
-            # suppress the hover readout.
             self._calibration = calibration
             self._session = None
             self._blink_timer.stop()
             self._save_calibration()
-        self.update()
 
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return super().mousePressEvent(event)
+        if self._session is not None and self._session.expecting_mode:
+            # Choose linear/log for the current axis by clicking a button.
+            self._choose_mode(event.position())
+            event.accept()
+            return
         if self._session is not None and self._session.expecting_click:
             # Calibration clicks land on the graph beneath the overlay;
             # make sure this window keeps focus so the typed value is
@@ -428,6 +441,20 @@ class OverlayWindow(QWidget):
         pos = event.globalPosition()
         dpr = self.devicePixelRatioF()
         self._session.record_point(int(pos.x() * dpr), int(pos.y() * dpr))
+
+    def _choose_mode(self, pos):
+        """Record the linear/log choice from a click on a mode button."""
+        # The mode buttons sit one 20px row below the prompt. Reuse the
+        # layout from _paint_instruction so click targets match the
+        # drawn buttons.
+        rects = self._mode_option_rects(self._mode_buttons_top())
+        for name, rect in rects.items():
+            if rect.contains(pos.toPoint()):
+                self._session.record_mode(name)
+                self._hover_mode = None
+                self._maybe_finish_calibration()
+                self.update()
+                return
 
     def _local_from_physical(self, px, py):
         """Map a physical screen point back to local logical coordinates."""
@@ -493,16 +520,31 @@ class OverlayWindow(QWidget):
         old = self._hover_pos
         self._hover_pos = event.position().toPoint()
         self._hover_active = self._calibration is not None
+        # Track which mode button is under the cursor so it can brighten.
+        mode_hover = None
+        if self._session is not None and self._session.expecting_mode:
+            for name, rect in self._mode_option_rects(
+                self._mode_buttons_top()
+            ).items():
+                if rect.contains(self._hover_pos):
+                    mode_hover = name
+                    break
         active = self._hover_active or (
             self._session is not None and self._session.expecting_click
         )
-        if active and self._hover_pos != old:
+        if (active and self._hover_pos != old) or (
+            mode_hover != self._hover_mode
+        ):
+            self._hover_mode = mode_hover
             self.update()
         super().mouseMoveEvent(event)
 
     def leaveEvent(self, event):
         if self._hover_active:
             self._hover_active = False
+            self.update()
+        if self._hover_mode:
+            self._hover_mode = None
             self.update()
         super().leaveEvent(event)
 
@@ -662,6 +704,36 @@ class OverlayWindow(QWidget):
         painter.drawText(QPointF(pos.x(), baseline), text)
         painter.restore()
 
+    def _mode_option_rects(self, row_top):
+        """Return the linear/log button rectangles for the given row top.
+
+        Two rounded translucent buttons sit side by side below the prompt
+        while the session is asking for a linear/log choice. The geometry
+        is computed here and shared by painting and hit-testing so the
+        drawn buttons and the click targets always agree.
+        """
+        button_w = 96
+        button_h = 28
+        gap = 16
+        left = _EDGE + 8
+        width = self.width() - left * 2
+        start_x = left + (width - (button_w * 2 + gap)) // 2
+        return {
+            "lin": QRect(start_x, row_top, button_w, button_h),
+            "log": QRect(
+                start_x + button_w + gap, row_top, button_w, button_h
+            ),
+        }
+
+    def _mode_buttons_top(self):
+        """The y of the mode-button row during the linear/log choice.
+
+        The prompt occupies the first row of the instruction block; the
+        buttons sit one 20px row below it (the value-input row is never
+        shown while a mode choice is pending, so the line count is fixed).
+        """
+        return self.height() - 96 + 20
+
     def _paint_instruction(self, painter):
         """Draw the calibration prompt and hints as floating translucent
         text at the bottom of the window, with no backing box."""
@@ -685,6 +757,9 @@ class OverlayWindow(QWidget):
         line += 1
         if self._session.expecting_value:
             self._draw_value_input(painter, left, top + line * 20, width)
+            line += 1
+        if self._session.expecting_mode:
+            self._draw_mode_buttons(painter, top + line * 20)
             line += 1
         if self._value_error:
             self._draw_outlined_text(
@@ -734,6 +809,48 @@ class OverlayWindow(QWidget):
                 QPointF(caret_x, baseline - 7),
                 QPointF(caret_x, baseline + 7),
             )
+
+    def _draw_mode_buttons(self, painter, row_top):
+        """Draw the linear/log choice buttons for the current axis."""
+        rects = self._mode_option_rects(row_top)
+        self._draw_mode_button(painter, rects["lin"], "Linear", "lin")
+        self._draw_mode_button(painter, rects["log"], "Log", "log")
+
+    def _draw_mode_button(self, painter, rect, label, name):
+        """Draw one mode button as a translucent rounded rect with a dark
+        halo outline and a faint fill that brightens when hovered, so the
+        graph shows through and it reads as a button rather than a box.
+
+        The halo is drawn in the halo color around the label so the text
+        stays legible over any content; the label itself is colored by the
+        axis hue so the choice feels tied to the axis being scaled.
+        """
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        hovered = self._hover_mode == name
+        # A faint fill so the button has a tangible extent over a busy
+        # graph, using the axis hue but heavily faded so it stays
+        # translucent and does not obscure what is behind it.
+        axis = self._session.current_axis
+        base = _X_COLOR if axis == "x" else _Y_COLOR
+        fill = QColor(
+            base.red(), base.green(), base.blue(), 60 if not hovered else 110
+        )
+        outline = QColor(
+            base.red(), base.green(), base.blue(), 200 if hovered else 140
+        )
+        painter.setPen(QPen(outline, 1))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(rect, 6, 6)
+        painter.restore()
+        self._draw_outlined_text(
+            painter,
+            label,
+            QPointF(rect.center().x(), rect.center().y()),
+            QColor(240, 240, 240),
+            10,
+            bold=True,
+        )
 
     def _paint_calibration_region(self, painter):
         """Draw the calibrated screen region as a guide rectangle.
