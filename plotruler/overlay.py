@@ -862,10 +862,11 @@ class OverlayWindow(QWidget):
                 QPointF(left, top + line * _INSTRUCTION_ROW_H),
                 QColor(255, 130, 130),
                 _TEXT_MEDIUM,
-                bold=False,
+                bold=True,
             )
             line += 1
-        # Hint row, right-aligned.
+        # Hint row, right-aligned. Matches the prompt's weight and size so
+        # the whole instruction block reads as one consistent style.
         hint_text = (
             "Ctrl+Z undo  ·  Esc cancel"
             if self._session.active
@@ -875,9 +876,9 @@ class OverlayWindow(QWidget):
             painter,
             hint_text,
             QPointF(left + width - 220, top + line * _INSTRUCTION_ROW_H),
-            QColor(210, 210, 210),
-            _TEXT_MEDIUM,
-            bold=False,
+            QColor(235, 235, 235),
+            _TEXT_LARGE,
+            bold=True,
         )
 
     def _draw_value_input(self, painter, left, top, width):
@@ -1026,18 +1027,18 @@ class OverlayWindow(QWidget):
             painter,
             info,
             QPointF(x + 14, y + 40),
-            QColor(200, 200, 200),
+            QColor(220, 220, 220),
             _TEXT_SMALL,
-            bold=False,
+            bold=True,
         )
         if self._copy_notice:
             self._draw_outlined_text(
                 painter,
                 self._copy_notice,
                 QPointF(x + 14, y + 64),
-                QColor(140, 230, 150),
+                QColor(150, 235, 160),
                 _TEXT_SMALL,
-                bold=False,
+                bold=True,
             )
 
     def resizeEvent(self, event):
