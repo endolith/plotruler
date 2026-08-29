@@ -2,17 +2,15 @@
 
 # -*- coding: utf-8 -*-
 
-import pytest
-
 from plotruler.format import (
     AUTO,
-    E,
     ENGINEERING,
     NAMES,
     OPTIONS,
     PLAIN,
     SCIENTIFIC,
     SI,
+    E,
     is_valid,
     render,
     superscript,
@@ -82,6 +80,30 @@ def test_si_prefix_uses_units():
     """SI-prefix mode must emit the prefix symbol for the exponent band."""
     assert render(531000, SI, 1, None) == "531 k"
     assert render(4.8e-9, SI, 1, None) == "4.8 n"
+
+
+def test_si_prefix_does_not_leak_exponent_into_mantissa():
+    """SI prefixes must not show the mantissa in scientific e-notation.
+    A mantissa like 490 with few significant figures previously rendered
+    as '4.9e+02 m' because the 'g' format spec reintroduced an exponent."""
+    assert render(490.0, SI, 2, None) == "490"
+    assert render(0.49, SI, 2, None) == "490 m"
+    assert render(1.8e6, SI, 2, None) == "1.8 M"
+
+
+def test_engineering_rolls_over_mantissa_past_1000():
+    """Engineering notation must keep 1 <= |m| < 1000, so a mantissa that
+    rounds up to 1000 (e.g. 999.999 at few sig figs) must bump the
+    exponent by 3 instead of leaving an out-of-range mantissa."""
+    assert render(999999.0, ENGINEERING, 2, None) == ("1" + _TIMES + _sup(6))
+    assert render(999.0, ENGINEERING, 2, None) == ("999" + _TIMES + _sup(0))
+
+
+def test_si_prefix_rolls_over_mantissa_past_1000():
+    """SI prefixes must advance to the next prefix band when a mantissa
+    rounds up to 1000, e.g. 9999 with "k" rounds to "10 k" not "1000 k"."""
+    assert render(9999.0, SI, 2, None) == "10 k"
+    assert render(999999.0, SI, 2, None) == "1 M"
 
 
 def test_log_axis_uses_significant_figures():

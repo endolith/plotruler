@@ -109,9 +109,7 @@ class AxisCalibration:
         precision (decimals for linear, sig-figs for log) it implies.
         """
         decimals = None if self.log else self.decimals(pixel_error)
-        sig = self._log_significant_figures(
-            pixel_error
-        ) if self.log else None
+        sig = self._log_significant_figures(pixel_error) if self.log else None
         return render(value, fmt, decimals, sig)
 
     def __repr__(self):

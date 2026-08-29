@@ -123,8 +123,20 @@ def _sig_figs_for_decimals(value, decimals):
 
 
 def _sig(value, sig_figs):
-    """Format value to a given number of significant figures (g spec)."""
-    return f"{value:.{sig_figs}g}"
+    """Round value to a number of significant figures as a plain decimal.
+
+    This must never resort to the 'g' format specifier: for a mantissa
+    like 490 with 2 significant figures, '%.2g' yields '4.9e+02', which
+    leaks scientific notation into SI prefixes or engineering mantissas.
+    Instead, compute how many decimal places a value rounded to sig_figs
+    needs and render with a plain fixed-point format.
+    """
+    if value == 0 or not isfinite(value):
+        return str(value)
+    digits = sig_figs - 1 - floor(log10(abs(value)))
+    if digits < 0:
+        digits = 0
+    return f"{value:.{digits}f}"
 
 
 def _plain(value, decimals, sig_figs):
@@ -150,7 +162,7 @@ def _scientific(value, sig_figs):
     sign = "-" if value < 0 else ""
     mant = abs(value)
     exponent = floor(log10(mant))
-    scaled = mant / (10 ** exponent)
+    scaled = mant / (10**exponent)
     text = _strip_zeros(_sig(scaled, sig_figs))
     if float(text) >= 10:  # rounding pushed the mantissa into the next decade
         scaled = mant / (10 ** (exponent + 1))
@@ -166,8 +178,12 @@ def _engineering(value, sig_figs):
     sign = "-" if value < 0 else ""
     mant = abs(value)
     exponent = 3 * floor(floor(log10(mant)) / 3)
-    scaled = mant / (10 ** exponent)
+    scaled = mant / (10**exponent)
     text = _strip_zeros(_sig(scaled, sig_figs))
+    if float(text) >= 1000:  # rounding overflowed the mantissa past 1000
+        exponent += 3
+        scaled = mant / (10**exponent)
+        text = _strip_zeros(_sig(scaled, sig_figs))
     return f"{sign}{text}{_times_ten(exponent)}"
 
 
@@ -178,7 +194,7 @@ def _e_notation(value, sig_figs):
     sign = "-" if value < 0 else ""
     mant = abs(value)
     exponent = floor(log10(mant))
-    scaled = mant / (10 ** exponent)
+    scaled = mant / (10**exponent)
     text = _strip_zeros(_sig(scaled, sig_figs))
     if float(text) >= 10:
         scaled = mant / (10 ** (exponent + 1))
@@ -194,12 +210,12 @@ def _si_prefix(value, sig_figs):
     mant = abs(value)
     exponent = 3 * floor(floor(log10(mant)) / 3)
     prefix = _SI_PREFIXES.get(exponent, "")
-    scaled = mant / (10 ** exponent)
+    scaled = mant / (10**exponent)
     text = _strip_zeros(_sig(scaled, sig_figs))
     if float(text) >= 1000:  # rounding spilled into the next prefix band
         exponent += 3
         prefix = _SI_PREFIXES.get(exponent, "")
-        scaled = mant / (10 ** exponent)
+        scaled = mant / (10**exponent)
         text = _strip_zeros(_sig(scaled, sig_figs))
     suffix = (" " + prefix) if prefix else ""
     return f"{text}{suffix}"
