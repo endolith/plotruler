@@ -38,6 +38,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from . import storage, win_hittest
 from .core import CalibrationSession
+from .format import AUTO, NAMES, OPTIONS, is_valid
 from .titlebar import TITLEBAR_HEIGHT, TitleBar
 
 # Width of the invisible edge hit-zones, in logical pixels.
@@ -107,6 +108,16 @@ class OverlayWindow(QWidget):
         self._blink_timer = QTimer(self)
         self._blink_timer.setInterval(530)
         self._blink_timer.timeout.connect(self._blink)
+
+        # Readout number format (auto/plain/scientific/engineering/e/si),
+        # loaded from the config file; a transient "format changed" notice
+        # is shown when the user switches it.
+        self._num_format = AUTO
+        self._format_notice = ""
+        self._format_timer = QTimer(self)
+        self._format_timer.setSingleShot(True)
+        self._format_timer.setInterval(900)
+        self._format_timer.timeout.connect(self._clear_format_notice)
 
         # Tracks the manual maximize state; the window itself stays in a
         # normal window state so nothing conflicts with native snapping.
@@ -261,6 +272,9 @@ class OverlayWindow(QWidget):
             x, y, width, height = geometry
             self.setGeometry(x, y, width, height)
         self._calibration = storage.calibration(self._config_path)
+        saved_format = storage.num_format(self._config_path)
+        if saved_format is not None:
+            self._num_format = saved_format
 
     def _save_geometry(self):
         """Persist the current window geometry."""
@@ -324,7 +338,38 @@ class OverlayWindow(QWidget):
             self.minimize_to_tray()
             event.accept()
             return
+        # Number keys switch the readout format when not calibrating, so
+        # the user can flip between plain, scientific, etc. without a menu.
+        idx = self._format_key_index(event.key())
+        if idx is not None:
+            self.set_num_format(OPTIONS[idx])
+            event.accept()
+            return
         super().keyPressEvent(event)
+
+    def _format_key_index(self, key):
+        """Map a number-key to an index into OPTIONS, or None.
+
+        Keys 1..6 (and the numpad equivalents) select the format by the
+        same number shown in the tray menu, so the menu and the keyboard
+        always agree.
+        """
+        mapping = {
+            Qt.Key.Key_1: 0,
+            Qt.Key.Key_2: 1,
+            Qt.Key.Key_3: 2,
+            Qt.Key.Key_4: 3,
+            Qt.Key.Key_5: 4,
+            Qt.Key.Key_6: 5,
+        }
+        return mapping.get(key)
+
+    def _format_number(self, fmt):
+        """Return the number-key that selects the given format (1-based)."""
+        try:
+            return str(OPTIONS.index(fmt) + 1)
+        except ValueError:
+            return "?"
 
     def _session_key(self, event):
         """Route a key press during calibration."""
@@ -424,8 +469,8 @@ class OverlayWindow(QWidget):
             vx, vy = self._calibration.xy(px, py)
         except ValueError, ZeroDivisionError:
             return
-        x_str = self._calibration.x.format(vx)
-        y_str = self._calibration.y.format(vy)
+        x_str = self._calibration.x.format(vx, fmt=self._num_format)
+        y_str = self._calibration.y.format(vy, fmt=self._num_format)
         text = f"({x_str}, {y_str})"
         QApplication.clipboard().setText(text)
         self._copy_notice = "Copied " + text
@@ -435,6 +480,27 @@ class OverlayWindow(QWidget):
     def _clear_copy_notice(self):
         self._copy_notice = ""
         self.update()
+
+    def set_num_format(self, fmt):
+        """Switch the readout number format, showing a brief confirmation.
+
+        The change is displayed for a moment via _format_notice and saved
+        to the config file so it survives a restart.
+        """
+        if not is_valid(fmt) or fmt == self._num_format:
+            return
+        self._num_format = fmt
+        self._format_notice = "Number format: " + NAMES[fmt]
+        self._format_timer.start()
+        self._save_num_format()
+        self.update()
+
+    def _clear_format_notice(self):
+        self._format_notice = ""
+        self.update()
+
+    def _save_num_format(self):
+        storage.save(self._config_path, num_format=self._num_format)
 
     def _record_click(self, event):
         """Store the clicked point in physical screen pixels."""
@@ -891,8 +957,8 @@ class OverlayWindow(QWidget):
             vx, vy = self._calibration.xy(px, py)
         except ValueError, ZeroDivisionError:
             return
-        x_text = self._calibration.x.format(vx)
-        y_text = self._calibration.y.format(vy)
+        x_text = self._calibration.x.format(vx, fmt=self._num_format)
+        y_text = self._calibration.y.format(vy, fmt=self._num_format)
 
         # Crosshair: two translucent lines through the cursor, snapped to
         # the graph pixel so the readout lines up with it. Drawn with a
@@ -923,11 +989,30 @@ class OverlayWindow(QWidget):
             11,
             bold=True,
         )
+        # A small indicator showing the active number format and the number
+        # key that selects it, plus any transient format-change notice. This
+        # keeps the user aware of which format is shown since some formats
+        # (plain vs scientific for a rounded value) can look alike.
+        info = self._format_notice or (
+            "Format "
+            + self._format_number(self._num_format)
+            + " ("
+            + NAMES[self._num_format]
+            + ")"
+        )
+        self._draw_outlined_text(
+            painter,
+            info,
+            QPointF(x + 14, y + 34),
+            QColor(200, 200, 200),
+            9,
+            bold=False,
+        )
         if self._copy_notice:
             self._draw_outlined_text(
                 painter,
                 self._copy_notice,
-                QPointF(x + 14, y + 34),
+                QPointF(x + 14, y + 50),
                 QColor(140, 230, 150),
                 9,
                 bold=False,

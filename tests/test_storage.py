@@ -64,6 +64,34 @@ def test_missing_hotkey_returns_none(tmp_path):
     assert storage.hotkey(path) is None
 
 
+def test_save_and_load_num_format(tmp_path):
+    """A number format key must round-trip through save() and num_format()."""
+    path = os.path.join(tmp_path, "settings.json")
+    storage.save(path, num_format="engineering")
+    assert storage.num_format(path) == "engineering"
+
+
+def test_missing_num_format_returns_none(tmp_path):
+    """A file without a num_format entry must yield None, so the caller
+    applies its default rather than crashing."""
+    path = os.path.join(tmp_path, "settings.json")
+    assert storage.num_format(path) is None
+
+
+def test_invalid_num_format_returns_none(tmp_path):
+    """A bogus num_format value must yield None, not raise, so a corrupted
+    config falls back to the default."""
+    path = os.path.join(tmp_path, "settings.json")
+    storage.save(path, geometry=[0, 0, 100, 100])
+    data = storage.load(path)
+    data["num_format"] = "octal"
+    import json
+
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle)
+    assert storage.num_format(path) is None
+
+
 def test_missing_file_returns_empty(tmp_path):
     """A missing config file must yield an empty dict and None values, not
     raise, so a first run starts cleanly."""

@@ -83,8 +83,8 @@ def load(path):
     return data
 
 
-def save(path, geometry=None, calibration=None, hotkey=None):
-    """Write geometry, calibration, and/or hotkey to the config file.
+def save(path, geometry=None, calibration=None, hotkey=None, num_format=None):
+    """Write geometry, calibration, hotkey, and/or number format to config.
 
     Existing values not being updated are preserved, so callers only need
     to pass the fields they changed. Missing keys just keep their old
@@ -97,6 +97,8 @@ def save(path, geometry=None, calibration=None, hotkey=None):
         data["calibration"] = calibration_to_dict(calibration)
     if hotkey is not None:
         data["hotkey"] = hotkey
+    if num_format is not None:
+        data["num_format"] = num_format
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
@@ -113,6 +115,21 @@ def hotkey(path):
     """Return the saved hotkey config dict, or None."""
     value = load(path).get("hotkey")
     return value if isinstance(value, dict) else None
+
+
+def num_format(path):
+    """Return the saved readout number format key, or None.
+
+    Falls back to None (the caller uses its default) if the value is
+    missing or not a known format, so a corrupted or older config does
+    not crash the app.
+    """
+    from .format import is_valid
+
+    value = load(path).get("num_format")
+    if isinstance(value, str) and is_valid(value):
+        return value
+    return None
 
 
 def geometry(path):

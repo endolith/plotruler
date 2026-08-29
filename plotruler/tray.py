@@ -8,8 +8,17 @@ new calibration, and quit.
 """
 
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
+    QIcon,
+    QPainter,
+    QPixmap,
+)
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+
+from .format import NAMES, OPTIONS
 
 # Accent colors matching the overlay so the tray icon feels consistent.
 # The icon cyan is brighter than the overlay's so the crosshair arms have
@@ -98,10 +107,28 @@ class TrayIcon(QObject):
         self._quit_action = QAction("Quit", self)
         self._quit_action.triggered.connect(self._quit)
 
+        self._format_menu = QMenu("Number Format", self._menu)
+        self._format_group = QActionGroup(self._format_menu)
+        self._format_actions = {}
+        for index, fmt in enumerate(OPTIONS):
+            # Number each option the same way the keyboard selects it, so
+            # the menu and the number-key shortcuts always agree.
+            action = QAction(f"{index + 1}. {NAMES[fmt]}", self._format_menu)
+            action.setCheckable(True)
+            action.triggered.connect(
+                lambda _checked, key=fmt: self._choose_format(key)
+            )
+            self._format_group.addAction(action)
+            self._format_actions[fmt] = action
+            self._format_menu.addAction(action)
+        self._format_menu.aboutToShow.connect(self._sync_format_check)
+
         self._menu.addAction(self._toggle_action)
         self._menu.addSeparator()
         self._menu.addAction(self._new_action)
         self._menu.addAction(self._hotkey_action)
+        self._menu.addSeparator()
+        self._menu.addMenu(self._format_menu)
         self._menu.addSeparator()
         self._menu.addAction(self._quit_action)
 
@@ -113,6 +140,21 @@ class TrayIcon(QObject):
     def _change_hotkey(self):
         if self._on_change_hotkey is not None:
             self._on_change_hotkey()
+
+    def _choose_format(self, fmt):
+        """Apply a number format chosen from the tray menu."""
+        self._window.set_num_format(fmt)
+
+    def _sync_format_check(self):
+        """Re-check the menu item matching the overlay's current format.
+
+        The format can change via the number-key shortcuts while the
+        overlay is focused, so the menu must reflect the live selection
+        each time it opens rather than remembering a stale check.
+        """
+        current = getattr(self._window, "_num_format", OPTIONS[0])
+        for fmt, action in self._format_actions.items():
+            action.setChecked(fmt == current)
 
     def _start_calibration(self):
         self._window.show()
