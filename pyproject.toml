@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "plotruler"
-version = "0.1.0"
+version = "0.1.1"
 description = "Read (X, Y) values off an on-screen graph with a translucent overlay"
 readme = "README.md"
 requires-python = ">=3.14"
