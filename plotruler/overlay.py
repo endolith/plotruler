@@ -49,10 +49,12 @@ _EDGE = 8
 # rather than falling through to the graph underneath.
 _RESIZE_ZONE = 14
 
-# Calibration instruction block: gap from the window bottom to the first
-# prompt line, and the vertical space between stacked prompt lines. Shared
-# by painting and by the mode-button hit-test so they never drift.
-_INSTRUCTION_BOTTOM_GAP = 96
+# Calibration instruction block: margin between the last instruction row
+# and the window bottom, and the vertical space between stacked rows. The
+# block is bottom-aligned so the group reads pinned near the bottom; the
+# row height is shared by painting and the mode-button hit-test so they
+# never drift.
+_INSTRUCTION_BOTTOM_MARGIN = 12
 _INSTRUCTION_ROW_H = 26
 
 # Font sizes, one consistent scale across the overlay. Headline text (the
@@ -820,26 +822,53 @@ class OverlayWindow(QWidget):
     def _mode_buttons_top(self):
         """The y of the mode-button row during the linear/log choice.
 
-        The prompt occupies the first row of the instruction block; the
-        buttons sit one row below it (the value-input row is never shown
-        while a mode choice is pending, so the line count is fixed).
+        During a mode choice the block is just the prompt plus the buttons
+        (the value-input and error rows are never shown), so it is
+        bottom-aligned as two rows; the buttons occupy the second row.
+        This matches the painting in _paint_instruction so the click
+        targets and the drawn buttons agree.
         """
-        return self.height() - _INSTRUCTION_BOTTOM_GAP + _INSTRUCTION_ROW_H
+        return (
+            self.height()
+            - _INSTRUCTION_BOTTOM_MARGIN
+            - 2 * _INSTRUCTION_ROW_H
+            + _INSTRUCTION_ROW_H
+        )
 
     def _paint_instruction(self, painter):
         """Draw the calibration prompt and hints as floating translucent
-        text at the bottom of the window, with no backing box."""
+        text pinned low in the window, with no backing box.
+
+        The rows read in order from the instruction down: prompt, then the
+        value input (or mode buttons, or error). The block is placed so its
+        last row sits a margin above the bottom edge, keeping the whole
+        instruction group near the bottom without any row clipping.
+        """
         left = _EDGE + 8
         width = self.width() - left * 2
-        top = self.height() - _INSTRUCTION_BOTTOM_GAP
         prompt = self._session.prompt()
         if self._session.active:
             title_color = QColor(255, 255, 255)
         else:
             title_color = QColor(140, 230, 150)
+
+        # Count the rows that will be drawn so the block can be placed
+        # bottom-aligned: prompt always, then the conditional rows.
+        rows = 1
+        if self._session.expecting_value:
+            rows += 1
+        if self._session.expecting_mode:
+            rows += 1
+        if self._value_error:
+            rows += 1
+        top = (
+            self.height()
+            - _INSTRUCTION_BOTTOM_MARGIN
+            - rows * _INSTRUCTION_ROW_H
+        )
+
         # Prompt on the left and the keyboard hint on the right, on the same
-        # baseline so the instruction block reads as one row rather than
-        # the hint drifting lower depending on which rows are shown.
+        # baseline so the instruction block reads as one row.
         self._draw_outlined_text(
             painter,
             prompt,
@@ -861,20 +890,20 @@ class OverlayWindow(QWidget):
             _TEXT_LARGE,
             bold=True,
         )
-        line = 1
+
+        # Interactive rows below the prompt, most recent nearest it.
+        row_y = top + _INSTRUCTION_ROW_H
         if self._session.expecting_value:
-            self._draw_value_input(
-                painter, left, top + line * _INSTRUCTION_ROW_H, width
-            )
-            line += 1
+            self._draw_value_input(painter, left, row_y, width)
+            row_y += _INSTRUCTION_ROW_H
         if self._session.expecting_mode:
-            self._draw_mode_buttons(painter, top + line * _INSTRUCTION_ROW_H)
-            line += 1
+            self._draw_mode_buttons(painter, row_y)
+            row_y += _INSTRUCTION_ROW_H
         if self._value_error:
             self._draw_outlined_text(
                 painter,
                 self._value_error,
-                QPointF(left, top + line * _INSTRUCTION_ROW_H),
+                QPointF(left, row_y),
                 QColor(255, 130, 130),
                 _TEXT_MEDIUM,
                 bold=True,
