@@ -672,12 +672,17 @@ class OverlayWindow(QWidget):
             bold=True,
         )
 
-    def _draw_outlined_text(self, painter, text, pos, color, size, bold):
+    def _draw_outlined_text(
+        self, painter, text, pos, color, size, bold, centered=False
+    ):
         """Draw translucent text with a dark outline so it stays legible
         over any background without an opaque backing box.
 
         The graph shows through the semi-transparent glyphs, but the dark
         halo keeps the text readable on light or dark content.
+
+        When centered is True the text is centered on pos.x() rather than
+        starting there, so it can be centered inside a button or label.
         """
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -688,6 +693,7 @@ class OverlayWindow(QWidget):
         metrics = QFontMetricsF(font)
         height = metrics.height()
         baseline = pos.y() + height / 2
+        x = pos.x() - (metrics.horizontalAdvance(text) / 2 if centered else 0)
         # Dark halo: draw the text offset in a ring around the glyph, then
         # the colored glyph on top. Offsets are symmetric on all four
         # sides so the outline reads evenly, not just left and right. This
@@ -699,9 +705,9 @@ class OverlayWindow(QWidget):
             for dy in (-2, -1, 0, 1, 2):
                 if dx == 0 and dy == 0:
                     continue
-                painter.drawText(QPointF(pos.x() + dx, baseline + dy), text)
+                painter.drawText(QPointF(x + dx, baseline + dy), text)
         painter.setPen(color)
-        painter.drawText(QPointF(pos.x(), baseline), text)
+        painter.drawText(QPointF(x, baseline), text)
         painter.restore()
 
     def _mode_option_rects(self, row_top):
@@ -850,6 +856,7 @@ class OverlayWindow(QWidget):
             QColor(240, 240, 240),
             10,
             bold=True,
+            centered=True,
         )
 
     def _paint_calibration_region(self, painter):
