@@ -833,20 +833,35 @@ class OverlayWindow(QWidget):
         width = self.width() - left * 2
         top = self.height() - _INSTRUCTION_BOTTOM_GAP
         prompt = self._session.prompt()
-        line = 0
         if self._session.active:
             title_color = QColor(255, 255, 255)
         else:
             title_color = QColor(140, 230, 150)
+        # Prompt on the left and the keyboard hint on the right, on the same
+        # baseline so the instruction block reads as one row rather than
+        # the hint drifting lower depending on which rows are shown.
         self._draw_outlined_text(
             painter,
             prompt,
-            QPointF(left, top + line * _INSTRUCTION_ROW_H),
+            QPointF(left, top),
             title_color,
             _TEXT_LARGE,
             bold=True,
         )
-        line += 1
+        hint_text = (
+            "Ctrl+Z undo  ·  Esc cancel"
+            if self._session.active
+            else "Ctrl+N redo  ·  Esc hide"
+        )
+        self._draw_outlined_text(
+            painter,
+            hint_text,
+            QPointF(left + width - 220, top),
+            QColor(235, 235, 235),
+            _TEXT_LARGE,
+            bold=True,
+        )
+        line = 1
         if self._session.expecting_value:
             self._draw_value_input(
                 painter, left, top + line * _INSTRUCTION_ROW_H, width
@@ -864,22 +879,6 @@ class OverlayWindow(QWidget):
                 _TEXT_MEDIUM,
                 bold=True,
             )
-            line += 1
-        # Hint row, right-aligned. Matches the prompt's weight and size so
-        # the whole instruction block reads as one consistent style.
-        hint_text = (
-            "Ctrl+Z undo  ·  Esc cancel"
-            if self._session.active
-            else "Ctrl+N redo  ·  Esc hide"
-        )
-        self._draw_outlined_text(
-            painter,
-            hint_text,
-            QPointF(left + width - 220, top + line * _INSTRUCTION_ROW_H),
-            QColor(235, 235, 235),
-            _TEXT_LARGE,
-            bold=True,
-        )
 
     def _draw_value_input(self, painter, left, top, width):
         """Draw the typed value and a blinking caret on the input line."""
