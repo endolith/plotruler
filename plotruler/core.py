@@ -15,6 +15,8 @@ step. X and Y are independent, so a full calibration is just two maps.
 
 from math import floor, isfinite, log10
 
+from .format import AUTO, render
+
 
 class AxisCalibration:
     """Maps one screen axis to values using two (coordinate, value) anchors.
@@ -97,17 +99,20 @@ class AxisCalibration:
             return 1
         return max(1, -floor(log10(relative)))
 
-    def format(self, value, pixel_error=1.0):
-        """Return value as a string rounded to the display precision.
+    def format(self, value, pixel_error=1.0, fmt=AUTO):
+        """Return value as a string using the requested number format.
 
         A linear axis rounds to decimals; a log axis shows a fixed
         number of significant figures because its precision is relative,
-        not additive.
+        not additive. The number format (plain, scientific, etc.) is
+        applied by the formatter module; the axis only supplies the
+        precision (decimals for linear, sig-figs for log) it implies.
         """
-        if self.log:
-            sig = self._log_significant_figures(pixel_error)
-            return "{:.{}g}".format(value, sig)
-        return "{:.{}f}".format(value, self.decimals(pixel_error))
+        decimals = None if self.log else self.decimals(pixel_error)
+        sig = self._log_significant_figures(
+            pixel_error
+        ) if self.log else None
+        return render(value, fmt, decimals, sig)
 
     def __repr__(self):
         return (
