@@ -56,6 +56,16 @@ python build/build.py      # build dist/PlotRuler.exe (requires pyinstaller)
 - Add the trailer `Co-authored-by: opencode <opencode@anomalyco.ai>` to every commit.
 - Never commit agent-generated scratch files (summary notes, session dumps, chat exports).
 
+## Versioning
+
+- **Semantic Versioning** (MAJOR.MINOR.PATCH). Bump MAJOR on breaking changes, MINOR on new features, PATCH on fixes; pre-release tags (`-rc1`, etc.) are allowed when preparing a release.
+- The version lives in **three places** that must be bumped together in the same commit:
+  - `pyproject.toml` → `[project] version`
+  - `plotruler/__init__.py` → `__version__`
+  - `build/version_info.txt` → the `filevers`/`prodvers` tuples and the `FileVersion`/`ProductVersion` strings
+- Docstring on the entry point or README may mention the version, but only as a mirror of these three.
+- The version in the code is the source of truth; tag a release with a matching `vX.Y.Z` when cutting one.
+
 ## Docs
 
 - Update the README when user-visible behavior changes.
@@ -65,6 +75,6 @@ python build/build.py      # build dist/PlotRuler.exe (requires pyinstaller)
 
 MVP is: live translucent overlay; linear-rectangle calibration only (X axis then Y axis, two click-points each); hover-to-read; click-to-copy with "copied" confirmation; custom always-visible translucent title bar with resize handles; calibration + window position persistence; tray icon and global hotkey.
 
-Deferred: corner/homography mode, log axes, X-only/Y-only modes, pins/slope readout, CSV digitizing, PyInstaller packaging.
+Deferred: corner/homography mode, log axes, X-only/Y-only modes, pins/slope readout, CSV digitizing.
 
 `spec.md` is the product reference. When it conflicts with decisions recorded here, this file wins — the spec was AI-written and worded more rigidly than the product actually is.
