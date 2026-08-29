@@ -96,3 +96,17 @@ def test_qmodifiers_to_names_maps_meta_to_win():
         flags.MetaModifier | flags.AltModifier
     ) == ["win", "alt"]
     assert hotkey.qmodifiers_to_names(flags.ShiftModifier) == ["shift"]
+
+
+def test_registration_is_noop_off_windows():
+    """register() must fail closed on non-Windows rather than calling the
+    missing ctypes.windll, so the hotkey is simply unavailable."""
+    assert hotkey.GlobalHotkey(hotkey.DEFAULT_COMBO).register() is False
+
+
+def test_native_event_filter_is_noop_off_windows():
+    """The native filter must decline every event on non-Windows instead of
+    dereferencing ctypes.windll, so an unrelated platform event cannot
+    crash the process."""
+    hk = hotkey.GlobalHotkey(hotkey.DEFAULT_COMBO)
+    assert hk.nativeEventFilter(b"windows_generic_MSG", 0) == (False, 0)

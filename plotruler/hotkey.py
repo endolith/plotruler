@@ -13,6 +13,7 @@ Windows-only. On other platforms registration is a no-op.
 """
 
 import ctypes
+import sys
 
 try:
     from ctypes import wintypes
@@ -20,6 +21,12 @@ except ImportError, OSError:
     wintypes = None
 
 from PySide6.QtCore import QAbstractNativeEventFilter
+
+# ctypes.wintypes imports fine on non-Windows (it is only struct types), so
+# a non-None wintypes does not prove we are on Windows, and calling
+# ctypes.windll on Linux fails with AttributeError. Gate every Win32 path
+# on the real OS.
+_IS_WINDOWS = sys.platform == "win32" and wintypes is not None
 
 MOD_ALT = 0x0001
 MOD_CONTROL = 0x0002
@@ -187,7 +194,7 @@ class GlobalHotkey(QAbstractNativeEventFilter):
 
     def register(self):
         """Register the hotkey; returns True on success."""
-        if wintypes is None:
+        if not _IS_WINDOWS:
             return False
         if self._registered:
             return True
@@ -202,7 +209,7 @@ class GlobalHotkey(QAbstractNativeEventFilter):
 
     def unregister(self):
         """Remove the hotkey if it was registered."""
-        if self._registered and wintypes is not None:
+        if self._registered and _IS_WINDOWS:
             ctypes.windll.user32.UnregisterHotKey(None, self._hotkey_id)
             self._registered = False
 
@@ -220,7 +227,7 @@ class GlobalHotkey(QAbstractNativeEventFilter):
         return self.register()
 
     def nativeEventFilter(self, event_type, message):
-        if wintypes is None or event_type != b"windows_generic_MSG":
+        if not _IS_WINDOWS or event_type != b"windows_generic_MSG":
             return False, 0
         try:
             msg = wintypes.MSG.from_address(int(message))

@@ -21,6 +21,7 @@ Windows-only. On other platforms every function is a no-op.
 """
 
 import ctypes
+import sys
 
 try:
     from ctypes import wintypes
@@ -28,6 +29,12 @@ except ImportError, OSError:
     wintypes = None
 
 from PySide6.QtCore import QPoint
+
+# ctypes.wintypes imports fine on every platform (it is only a module of
+# struct types); ctypes.windll is what is Windows-only. So wintypes being
+# non-None is not proof we are on Windows, and a windll call on Linux dies
+# with AttributeError. Gate every Win32 path in this file on the real OS.
+_IS_WINDOWS = sys.platform == "win32" and wintypes is not None
 
 debug_enabled = False
 
@@ -119,7 +126,7 @@ def window_rect(window):
     returns the pre-snap "restore" rect rather than where the window is
     really sitting on screen.
     """
-    if wintypes is None:
+    if not _IS_WINDOWS:
         return None
     try:
         hwnd = int(window.winId())
@@ -151,7 +158,7 @@ def set_window_rect(window, rect, show=SW_SHOW):
     its stored snap restore position, whereas SetWindowPlacement overrides
     that stored position in one atomic call.
     """
-    if wintypes is None:
+    if not _IS_WINDOWS:
         return
     try:
         hwnd = int(window.winId())
@@ -182,7 +189,7 @@ def apply_native_overlapped_style(window):
     overlapped-window styles. The frame is never drawn because
     WM_NCCALCSIZE collapses it.
     """
-    if wintypes is None:
+    if not _IS_WINDOWS:
         return
     hwnd = int(window.winId())
     user32 = ctypes.windll.user32
@@ -212,7 +219,7 @@ def apply_native_overlapped_style(window):
 
 def current_styles(window):
     """Return the window's live style and extended-style words, if any."""
-    if wintypes is None:
+    if not _IS_WINDOWS:
         return None, None
     try:
         hwnd = int(window.winId())
@@ -226,7 +233,7 @@ def current_styles(window):
 
 def handle_native_event(window, event_type, message):
     """Route a native event to its handler; returns (handled, result)."""
-    if wintypes is None or event_type != b"windows_generic_MSG":
+    if not _IS_WINDOWS or event_type != b"windows_generic_MSG":
         return False, 0
     try:
         msg = wintypes.MSG.from_address(int(message))
