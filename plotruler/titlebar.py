@@ -13,8 +13,13 @@ from PySide6.QtCore import QPointF, QRectF, QSizeF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
+from . import win_hittest
+
 TITLEBAR_HEIGHT = 32
 _BUTTON_WIDTH = 40
+# The invisible resize hit-zone width, matching the overlay so the top edge
+# and top corners resize the same way the other borders do on non-Windows.
+_RESIZE_ZONE = 14
 _GLYPH = QColor(220, 220, 220)
 _HOVER_BG = QColor(255, 255, 255, 36)
 
@@ -22,26 +27,41 @@ _HOVER_BG = QColor(255, 255, 255, 36)
 class TitleBar(QWidget):
     """A translucent title strip painted on the overlay."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, show_close=False):
         super().__init__(parent)
         self._min_rect = QRectF()
         self._max_rect = QRectF()
+        self._close_rect = QRectF()
         self._hover_button = None
         self._pressed_button = None
+        # On platforms with no system tray there is no way to summon the
+        # overlay back after hiding, so hiding is a dead end; offer a real
+        # close (quit) button instead. On Windows the tray is the natural
+        # close path and no button is drawn.
+        self.show_close = show_close
         self.setMouseTracking(True)
 
     def _layout(self):
         w = self.width()
+        # Buttons are laid right to left. With a close button present it
+        # takes the rightmost slot; otherwise minimize and maximize fill the
+        # two slots next to the edge, as on Windows.
+        right = w
+        if self.show_close:
+            self._close_rect = QRectF(
+                right - _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
+            )
+            right -= _BUTTON_WIDTH
         self._max_rect = QRectF(
-            w - _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
+            right - _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
         )
         self._min_rect = QRectF(
-            w - 2 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
+            right - 2 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
         )
 
     def is_over_buttons(self, pos):
         """True when a window-coordinate point hits a control button."""
-        for rect in (self._min_rect, self._max_rect):
+        for rect in (self._min_rect, self._max_rect, self._close_rect):
             if rect.contains(pos):
                 return True
         return False
@@ -50,6 +70,7 @@ class TitleBar(QWidget):
         for rect, name in (
             (self._min_rect, "min"),
             (self._max_rect, "max"),
+            (self._close_rect, "close"),
         ):
             if rect.contains(pos):
                 return name
@@ -74,16 +95,19 @@ class TitleBar(QWidget):
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(QColor(235, 235, 235))
+        # Reserve room for the buttons on the right; three when a close
+        # button is shown, two otherwise.
+        button_span = _BUTTON_WIDTH * (3 if self.show_close else 2)
         painter.drawText(
-            QRectF(
-                10, 0, self.width() - 2 * _BUTTON_WIDTH - 20, self.height()
-            ),
+            QRectF(10, 0, self.width() - button_span - 20, self.height()),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             "PlotRuler",
         )
 
         self._draw_minimize(painter)
         self._draw_maximize(painter)
+        if self.show_close:
+            self._draw_close(painter)
 
     def _draw_minimize(self, painter):
         if self._hover_button == "min":
@@ -107,9 +131,33 @@ class TitleBar(QWidget):
         else:
             painter.drawRect(QRectF(rect.x() + 12, rect.y() + 9, 16, 16))
 
+    def _draw_close(self, painter):
+        """Draw an X glyph for the close button."""
+        if self._hover_button == "close":
+            painter.fillRect(self._close_rect, _HOVER_BG)
+        painter.setPen(QPen(_GLYPH, 2))
+        rect = self._close_rect
+        x = rect.center().x()
+        y = rect.center().y()
+        painter.drawLine(QPointF(x - 7, y - 7), QPointF(x + 7, y + 7))
+        painter.drawLine(QPointF(x - 7, y + 7), QPointF(x + 7, y - 7))
+
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return
+        if not win_hittest._IS_WINDOWS:
+            # On X11 there is no WM_NCHITTEST, so a press on an edge zone
+            # resizes and a press on the bar moves the window itself. Ask
+            # Qt to drive the gesture directly.
+            edges = self._resize_edges(event.position())
+            if edges is not None:
+                self.window().windowHandle().startSystemResize(edges)
+                event.accept()
+                return
+            if self._button_at(event.position()) is None:
+                self.window().windowHandle().startSystemMove()
+                event.accept()
+                return
         # Remember which button was pressed, but do not act yet. Acting on
         # press would let the button's release fall through to whatever
         # window is underneath once we quit (see mouseReleaseEvent), which
@@ -117,6 +165,27 @@ class TitleBar(QWidget):
         # app beneath it.
         self._pressed_button = self._button_at(event.position())
         event.accept()
+
+    def _resize_edges(self, pos):
+        """Return the Qt.Edges for a top-edge resize at a titlebar point,
+        or None.
+
+        The titlebar covers the top strip, so the top border's resize zones
+        land here rather than in the overlay's mousePressEvent. Top corners
+        combine a vertical edge with a horizontal one; the middle of the bar
+        is a move, handled by the caller as a plain drag.
+        """
+        w = self.width()
+        x, y = pos.x(), pos.y()
+        if y >= _RESIZE_ZONE:
+            return None
+        edges = Qt.Edges()
+        if x < _RESIZE_ZONE:
+            edges |= Qt.Edge.LeftEdge
+        elif x >= w - _RESIZE_ZONE:
+            edges |= Qt.Edge.RightEdge
+        edges |= Qt.Edge.TopEdge
+        return edges
 
     def mouseReleaseEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
@@ -134,6 +203,10 @@ class TitleBar(QWidget):
             self.window().minimize_to_tray()
         elif button == "max":
             self.window().toggle_maximize()
+        elif button == "close":
+            # On no-tray platforms there is no way back after hiding, so
+            # close really quits rather than depositing a ghost overlay.
+            self.window().quit()
 
     def mouseMoveEvent(self, event):
         hover = self._button_at(event.position())

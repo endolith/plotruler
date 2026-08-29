@@ -34,7 +34,7 @@ from PySide6.QtGui import (
     QPainter,
     QPen,
 )
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QWidget
 
 from . import storage, win_hittest
 from .core import CalibrationSession
@@ -117,7 +117,13 @@ class OverlayWindow(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        self.title_bar = TitleBar(self)
+        # Tray availability decides how close/min/Esc behave. Windows always
+        # has a notification area; some desktop screens (e.g. GNOME without
+        # the AppIndicator extension) have no tray at all. Without one the
+        # overlay has no way to be brought back, so hiding is a dead end.
+        self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+
+        self.title_bar = TitleBar(self, show_close=not self._tray_available)
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
 
         # Calibration state. A session exists only while the user is
@@ -237,7 +243,15 @@ class OverlayWindow(QWidget):
         )
 
     def minimize_to_tray(self):
-        """Hide the overlay; the app stays resident in the tray."""
+        """Hide the overlay; the app stays resident in the tray.
+
+        Without a system tray there is no way to bring the overlay back, so
+        hiding would strand it unreachable; quit instead so the app does not
+        linger invisibly.
+        """
+        if not self._tray_available:
+            self.quit()
+            return
         self.hide()
 
     def toggle_visibility(self):
@@ -277,9 +291,24 @@ class OverlayWindow(QWidget):
     def closeEvent(self, event):
         # There is no close button; a WM_CLOSE (e.g. Alt+F4) should hide the
         # overlay to the tray rather than end the app. Quitting is explicit,
-        # from the tray menu. Ignoring the event cancels the close.
+        # from the tray menu. Ignoring the event cancels the close. Without a
+        # tray there is nothing to hide to, so let the close proceed.
+        if not self._tray_available:
+            event.accept()
+            return
         event.ignore()
         self.hide()
+
+    def quit(self):
+        """End the app outright, bypassing the hide-to-tray close path.
+
+        Geometry saves are debounced, so flush the pending one before the
+        event loop stops or the last move/resize would be lost on quit.
+        """
+        if self._geometry_timer.isActive():
+            self._geometry_timer.stop()
+            self._save_geometry()
+        QApplication.quit()
 
     def _restore_state(self):
         """Load the saved geometry and calibration, if any.
@@ -460,6 +489,15 @@ class OverlayWindow(QWidget):
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return super().mousePressEvent(event)
+        if not win_hittest._IS_WINDOWS:
+            # On X11 there is no WM_NCHITTEST to start a native resize, so
+            # ask Qt for one when the press lands in an edge zone. Windows
+            # keeps the Win32 shim and never reaches this point for edges.
+            edges = self._resize_edges(event.position().toPoint())
+            if edges is not None:
+                self.windowHandle().startSystemResize(edges)
+                event.accept()
+                return
         if self._session is not None and self._session.expecting_mode:
             # Choose linear/log for the current axis by clicking a button.
             self._choose_mode(event.position())
@@ -589,6 +627,28 @@ class OverlayWindow(QWidget):
                 return win_hittest.HTCLIENT
             return win_hittest.HTCAPTION
         return win_hittest.HTCLIENT
+
+    def _resize_edges(self, local):
+        """Return the Qt.Edges to resize for a local point, or None.
+
+        Used on non-Windows, where a frameless window has no WM_NCHITTEST to
+        hand edge drags to the OS. Mirrors hit_test_code's edge zones so
+        clicking-and-dragging a border resizes the overlay instead of being
+        treated as a click on the graph. Corners combine two edges. The top
+        strip is the TitleBar's and is handled there as a move/resize.
+        """
+        w, h = self.width(), self.height()
+        x, y = local.x(), local.y()
+        if not self.rect().contains(local) or y < TITLEBAR_HEIGHT:
+            return None
+        edges = Qt.Edges()
+        if x < _RESIZE_ZONE:
+            edges |= Qt.Edge.LeftEdge
+        elif x >= w - _RESIZE_ZONE:
+            edges |= Qt.Edge.RightEdge
+        if y >= h - _RESIZE_ZONE:
+            edges |= Qt.Edge.BottomEdge
+        return edges or None
 
     def nativeEvent(self, event_type, message):
         result = win_hittest.handle_native_event(self, event_type, message)
