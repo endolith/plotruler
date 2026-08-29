@@ -5,13 +5,15 @@ unit-testable and portable. The overlay layer passes coordinates in
 one consistent space (physical screen pixels); this module turns them
 into data values.
 
-Each axis is a linear (affine) map: two screen anchor points with known
-values define a line, and any screen coordinate is interpolated (or
-extrapolated) along it. X and Y are independent, so a full calibration
-is just two such lines.
+Each axis maps screen coordinate to value through two anchor points.
+By default the map is linear (affine): two anchor points define a line
+and any screen coordinate is interpolated (or extrapolated) along it.
+A log axis instead fits the line in logarithmic space, so a fixed pixel
+step yields a fixed multiplicative factor rather than a fixed additive
+step. X and Y are independent, so a full calibration is just two maps.
 """
 
-from math import floor, log10
+from math import floor, isfinite, log10
 
 
 class AxisCalibration:
@@ -22,15 +24,26 @@ class AxisCalibration:
     data values may grow in either direction, so an inverted axis
     (screen down = value up, the usual graph layout) is handled
     naturally by the line fit.
+
+    When log is True the line is fit on log10(value) instead of value:
+    value = 10**(a * coordinate + b). This requires both anchor values
+    to be positive (a log scale cannot represent zero or negatives).
     """
 
-    def __init__(self, p1, v1, p2, v2):
+    def __init__(self, p1, v1, p2, v2, log=False):
         if p1 == p2:
             raise ValueError("calibration anchors must be distinct")
         self.p1 = float(p1)
         self.v1 = float(v1)
         self.p2 = float(p2)
         self.v2 = float(v2)
+        self.log = bool(log)
+        if self.log and not (self.v1 > 0 and self.v2 > 0):
+            raise ValueError("log axes require positive anchor values")
+
+    def _log_slope(self):
+        """Decades per pixel, the log-axis analog of scale()."""
+        return (log10(self.v2) - log10(self.v1)) / (self.p2 - self.p1)
 
     def value(self, p):
         """Return the data value at screen coordinate p.
@@ -38,12 +51,23 @@ class AxisCalibration:
         Interpolates between the anchors, or extrapolates past them so
         the readout stays sensible just outside the calibrated region.
         """
+        if self.log:
+            exponent = log10(self.v1) + (p - self.p1) * self._log_slope()
+            result = 10 ** exponent
+            if not isfinite(result):
+                raise ValueError("log value is out of range")
+            return result
         return self.v1 + (p - self.p1) / (self.p2 - self.p1) * (
             self.v2 - self.v1
         )
 
     def scale(self):
-        """Return units per pixel for this axis (always positive)."""
+        """Return units per pixel for this axis (always positive).
+
+        Only meaningful for a linear axis; on a log axis a fixed pixel
+        step gives a multiplicative factor instead, so precision is
+        tracked as significant figures (see format()).
+        """
         return abs((self.v2 - self.v1) / (self.p2 - self.p1))
 
     def decimals(self, pixel_error=1.0):
@@ -59,12 +83,37 @@ class AxisCalibration:
             return 0
         return max(0, -floor(log10(uncertainty)))
 
+    def _log_significant_figures(self, pixel_error=1.0):
+        """Significant figures for a log axis given click precision.
+
+        A pixel_error-pixel error moves the value by a factor of
+        10**(slope * pixel_error), so the relative uncertainty is
+        constant along the axis; we show just enough significant figures
+        that the last one is not swamped by that uncertainty. This is
+        the log analog of decimals() for a linear axis.
+        """
+        relative = abs(10 ** (self._log_slope() * pixel_error) - 1)
+        if not isfinite(relative) or relative <= 0:
+            return 1
+        return max(1, -floor(log10(relative)))
+
     def format(self, value, pixel_error=1.0):
-        """Return value as a string rounded to the display precision."""
+        """Return value as a string rounded to the display precision.
+
+        A linear axis rounds to decimals; a log axis shows a fixed
+        number of significant figures because its precision is relative,
+        not additive.
+        """
+        if self.log:
+            sig = self._log_significant_figures(pixel_error)
+            return "{:.{}g}".format(value, sig)
         return "{:.{}f}".format(value, self.decimals(pixel_error))
 
     def __repr__(self):
-        return f"AxisCalibration({self.p1}, {self.v1}, {self.p2}, {self.v2})"
+        return (
+            f"AxisCalibration({self.p1}, {self.v1}, {self.p2}, {self.v2}, "
+            f"log={self.log})"
+        )
 
 
 class Calibration:
@@ -109,25 +158,33 @@ class CalibrationSession:
     they are in.
     """
 
-    # The whole flow as a fixed sequence of micro-steps: each point is a
-    # click followed by a value. A plain pointer into this list is the
-    # entire state, which makes undo trivial (step back and drop the
-    # stored data for the step we return to).
+    # The whole flow as a fixed sequence of micro-steps: for each axis a
+    # click, a value, a second click, a second value, then a linear/log
+    # choice. A plain pointer into this list is the entire state, which
+    # makes undo trivial (step back and drop the stored data for the step
+    # we return to).
     _STEPS = (
         ("click", "x", 0),
         ("value", "x", 0),
         ("click", "x", 1),
         ("value", "x", 1),
+        ("mode", "x", None),
         ("click", "y", 0),
         ("value", "y", 0),
         ("click", "y", 1),
         ("value", "y", 1),
+        ("mode", "y", None),
     )
 
     def __init__(self):
         self._step = 0
         self._points = {}
         self._values = {}
+        # Axis scale mode: "lin" or "log". Set when the mode step for an
+        # axis is reached. A log scale needs both values positive, so an
+        # axis with a zero (or negative) anchor is forced to linear and
+        # the mode step is skipped automatically.
+        self._scale_mode = {"x": "lin", "y": "lin"}
 
     @property
     def active(self):
@@ -143,6 +200,27 @@ class CalibrationSession:
     def expecting_value(self):
         """True when the next step needs a typed value."""
         return self.active and self._STEPS[self._step][0] == "value"
+
+    @property
+    def expecting_mode(self):
+        """True when the next step needs a linear/log choice.
+
+        This only advances if both anchor values for the axis are
+        positive; otherwise the axis cannot be logarithmic, so the mode
+        step is skipped and the axis stays linear.
+        """
+        if not self.active:
+            return False
+        kind, axis, _index = self._STEPS[self._step]
+        if kind != "mode":
+            return False
+        return self._log_permitted(axis)
+
+    def _log_permitted(self, axis):
+        """True if a log scale is possible for an axis (both values > 0)."""
+        v0 = self._values.get((axis, 0))
+        v1 = self._values.get((axis, 1))
+        return v0 is not None and v1 is not None and v0 > 0 and v1 > 0
 
     @property
     def current_axis(self):
@@ -164,6 +242,8 @@ class CalibrationSession:
         name = "X" if axis == "x" else "Y"
         if kind == "value":
             return f"Type the value at this {name} point, then press Enter"
+        if kind == "mode":
+            return f"Is the {name} axis linear or log? (click a button)"
         which = "first" if index == 0 else "second"
         return f"Click the {which} {name} point"
 
@@ -176,6 +256,7 @@ class CalibrationSession:
             raise ValueError("a value is being requested, not a click")
         self._points[(axis, index)] = (px, py)
         self._step += 1
+        self._skip_auto_mode()
 
     def record_value(self, value):
         """Attach a numeric value to the point that was just clicked."""
@@ -186,6 +267,39 @@ class CalibrationSession:
             raise ValueError("a click is being requested, not a value")
         self._values[(axis, index)] = float(value)
         self._step += 1
+        self._skip_auto_mode()
+
+    def record_mode(self, scale_mode):
+        """Choose how the current axis is scaled: 'lin' or 'log'.
+
+        Called when the session expects a mode step (see expecting_mode).
+        Rejects a log scale when the axis has a non-positive anchor value.
+        """
+        if not self.active:
+            raise ValueError("calibration is already complete")
+        kind, axis, _index = self._STEPS[self._step]
+        if kind != "mode":
+            raise ValueError("a mode choice is not being requested")
+        if scale_mode == "log" and not self._log_permitted(axis):
+            raise ValueError("log scale needs positive anchor values")
+        if scale_mode not in ("lin", "log"):
+            raise ValueError("scale mode must be 'lin' or 'log'")
+        self._scale_mode[axis] = scale_mode
+        self._step += 1
+
+    def _skip_auto_mode(self):
+        """Advance past a mode step the user never has to see.
+
+        A mode step whose axis has a zero or negative anchor cannot be
+        logarithmic, so it is fixed to linear and skipped rather than
+        stalling the flow waiting for a choice the user cannot make.
+        """
+        while self.active and self._STEPS[self._step][0] == "mode":
+            axis = self._STEPS[self._step][1]
+            if self._log_permitted(axis):
+                break
+            self._scale_mode[axis] = "lin"
+            self._step += 1
 
     def undo(self):
         """Undo the most recent step, clearing its stored data.
@@ -196,11 +310,23 @@ class CalibrationSession:
         if self._step == 0:
             return
         self._step -= 1
+        # Skip back over a mode step the user never saw (auto-skipped
+        # because log was impossible), so undo lands on a real step.
+        while self._step > 0 and self._STEPS[self._step][0] == "mode":
+            axis = self._STEPS[self._step][1]
+            if self._log_permitted(axis):
+                break
+            self._step -= 1
+        if self._step == 0:
+            return
         kind, axis, index = self._STEPS[self._step]
         if kind == "click":
             self._points.pop((axis, index), None)
-        else:
+        elif kind == "value":
             self._values.pop((axis, index), None)
+        else:
+            # Mode step: revert the axis to linear so it can be re-picked.
+            self._scale_mode[axis] = "lin"
 
     def anchors(self):
         """Return the points entered so far, oldest first.
@@ -238,4 +364,5 @@ class CalibrationSession:
 
         p0, v0 = coord((axis, 0))
         p1, v1 = coord((axis, 1))
-        return AxisCalibration(p0, v0, p1, v1)
+        log = self._scale_mode.get(axis, "lin") == "log"
+        return AxisCalibration(p0, v0, p1, v1, log=log)

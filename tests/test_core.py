@@ -114,3 +114,50 @@ def test_scale_is_positive():
     up = AxisCalibration(100, 0, 200, 10)
     down = AxisCalibration(100, 10, 200, 0)
     assert up.scale() == down.scale() == 0.1
+
+
+def test_log_axis_interpolates_in_log_space():
+    """A log axis fits the line on log10(value), so the midpoint of two
+    anchors a decade apart reads the geometric mean rather than the
+    arithmetic one."""
+    cal = AxisCalibration(100, 1, 200, 100, log=True)
+    assert cal.value(100) == pytest.approx(1.0)
+    assert cal.value(200) == pytest.approx(100.0)
+    # Midpoint of 1 and 100 is sqrt(100) = 10, not 50.5.
+    assert cal.value(150) == pytest.approx(10.0)
+
+
+def test_log_axis_handles_inverted_screen_direction():
+    """A log axis with screen down = value up must invert the same way a
+    linear axis does, so a high screen point reads a small value."""
+    cal = AxisCalibration(100, 100, 200, 1, log=True)
+    assert cal.value(100) == pytest.approx(100.0)
+    assert cal.value(200) == pytest.approx(1.0)
+    assert cal.value(150) == pytest.approx(10.0)
+
+
+def test_log_axis_extrapolates():
+    """A log axis extrapolates beyond the anchors rather than clamping,
+    so the readout stays continuous at the edges like a linear axis."""
+    cal = AxisCalibration(100, 1, 200, 100, log=True)
+    # One decade per 50 px past the anchor: 100 px past p2 is 4 decades up.
+    assert cal.value(300) == pytest.approx(10000.0)
+
+
+def test_log_axis_rejects_nonpositive_anchors():
+    """A log scale cannot represent zero or a negative value, so anchors
+    that are not both positive must be rejected loudly."""
+    with pytest.raises(ValueError):
+        AxisCalibration(100, 0, 200, 100, log=True)
+    with pytest.raises(ValueError):
+        AxisCalibration(100, -1, 200, 100, log=True)
+
+
+def test_log_format_uses_significant_figures():
+    """A log axis has constant relative precision, so format() must show
+    a fixed number of significant figures rather than fixed decimals."""
+    # 1 -> 100 over 100 px: a 1 px error is 10**0.02 - 1 ~= 4.7% relative,
+    # which is around 1-2 significant figures.
+    cal = AxisCalibration(100, 1, 200, 100, log=True)
+    assert cal.format(12.34) == "12"
+    assert cal.format(9.87) == "9.9"

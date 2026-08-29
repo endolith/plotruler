@@ -11,8 +11,8 @@ The config file is a small JSON object:
     {
         "geometry": [x, y, width, height],
         "calibration": {
-            "x": {"p1": ..., "v1": ..., "p2": ..., "v2": ...},
-            "y": {"p1": ..., "v1": ..., "p2": ..., "v2": ...}
+            "x": {"p1": ..., "v1": ..., "p2": ..., "v2": ..., "log": false},
+            "y": {"p1": ..., "v1": ..., "p2": ..., "v2": ..., "log": false}
         }
     }
 """
@@ -31,12 +31,14 @@ def calibration_to_dict(calibration):
             "v1": calibration.x.v1,
             "p2": calibration.x.p2,
             "v2": calibration.x.v2,
+            "log": calibration.x.log,
         },
         "y": {
             "p1": calibration.y.p1,
             "v1": calibration.y.v1,
             "p2": calibration.y.p2,
             "v2": calibration.y.v2,
+            "log": calibration.y.log,
         },
     }
 
@@ -45,7 +47,9 @@ def calibration_from_dict(data):
     """Build a Calibration from a dict, or None if it is malformed.
 
     A corrupted or truncated file should not crash the app; returning
-    None means the overlay simply starts uncalibrated.
+    None means the overlay simply starts uncalibrated. The log flag is
+    optional (defaults to linear) so configs written before the log-axis
+    feature still load.
     """
     try:
         x = AxisCalibration(
@@ -53,12 +57,14 @@ def calibration_from_dict(data):
             data["x"]["v1"],
             data["x"]["p2"],
             data["x"]["v2"],
+            log=bool(data["x"].get("log", False)),
         )
         y = AxisCalibration(
             data["y"]["p1"],
             data["y"]["v1"],
             data["y"]["p2"],
             data["y"]["v2"],
+            log=bool(data["y"].get("log", False)),
         )
     except KeyError, TypeError, ValueError:
         return None

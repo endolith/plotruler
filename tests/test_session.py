@@ -13,11 +13,23 @@ def _complete_x(session):
     session.record_value(10.0)
 
 
+def _complete_x_log(session):
+    """Complete the X axis points on a log scale (positive anchor values).
+
+    Records only the clicks and values, leaving the X mode step pending so
+    the caller decides linear vs log.
+    """
+    session.record_point(100, 50)
+    session.record_value(1.0)
+    session.record_point(300, 50)
+    session.record_value(100.0)
+
+
 def test_full_session_builds_calibration():
     """Four clicks and four values in order must produce a Calibration
     that maps the anchors to their typed values."""
     session = CalibrationSession()
-    _complete_x(session)
+    _complete_x(session)  # values 0 and 10: mode auto-skips to linear
     session.record_point(150, 100)
     session.record_value(20.0)
     session.record_point(150, 300)
@@ -91,13 +103,16 @@ def test_degenerate_axis_has_no_calibration():
 
 def test_prompts_follow_axis_order():
     """Prompts must guide X axis first then Y axis, in click-then-value
-    order, so the user always knows what the next step is."""
+    order with a linear/log choice after each axis's second value, so the
+    user always knows what the next step is."""
     session = CalibrationSession()
     seen = []
     while session.active:
         prompt = session.prompt()
         seen.append(prompt)
-        if prompt.startswith("Click"):
+        if session.expecting_mode:
+            session.record_mode("lin")
+        elif prompt.startswith("Click"):
             session.record_point(100, 100)
         else:
             session.record_value(1.0)
@@ -107,10 +122,12 @@ def test_prompts_follow_axis_order():
         "Type the value at this X point, then press Enter",
         "Click the second X point",
         "Type the value at this X point, then press Enter",
+        "Is the X axis linear or log? (click a button)",
         "Click the first Y point",
         "Type the value at this Y point, then press Enter",
         "Click the second Y point",
         "Type the value at this Y point, then press Enter",
+        "Is the Y axis linear or log? (click a button)",
         "Calibration complete",
     ]
 
@@ -149,6 +166,8 @@ def test_current_axis_reports_the_axis_being_calibrated():
     session.record_point(200, 60)
     assert session.current_axis == "x"
     session.record_value(4.0)
+    assert session.current_axis == "x"
+    session.record_mode("lin")
     assert session.current_axis == "y"
     session.record_point(300, 100)
     assert session.current_axis == "y"
@@ -156,6 +175,8 @@ def test_current_axis_reports_the_axis_being_calibrated():
     session.record_point(300, 300)
     assert session.current_axis == "y"
     session.record_value(6.0)
+    assert session.current_axis == "y"
+    session.record_mode("lin")
     assert session.current_axis is None
 
 
@@ -164,9 +185,98 @@ def test_flags_are_false_when_done():
     so the overlay stops capturing input."""
     session = CalibrationSession()
     while session.active:
-        if session.expecting_click:
+        if session.expecting_mode:
+            session.record_mode("lin")
+        elif session.expecting_click:
             session.record_point(100, 100)
         else:
             session.record_value(1.0)
     assert not session.expecting_click
     assert not session.expecting_value
+    assert not session.expecting_mode
+
+
+def test_mode_presented_after_each_axis():
+    """A mode step must follow the second value on each axis, so the user
+    picks linear/log for X then Y before moving on."""
+    session = CalibrationSession()
+    _complete_x_log(session)
+    assert session.expecting_mode
+    assert session.prompt() == "Is the X axis linear or log? (click a button)"
+    session.record_mode("log")
+    session.record_point(150, 100)
+    session.record_value(1.0)
+    session.record_point(150, 300)
+    session.record_value(10.0)
+    assert session.expecting_mode
+    assert session.prompt() == "Is the Y axis linear or log? (click a button)"
+
+
+def test_log_mode_applies_to_axis():
+    """Choosing log for an axis must produce a calibration where that
+    axis maps in log space and the other stays linear."""
+    session = CalibrationSession()
+    _complete_x_log(session)
+    session.record_mode("log")
+    session.record_point(150, 100)
+    session.record_value(1.0)
+    session.record_point(150, 300)
+    session.record_value(10.0)
+    session.record_mode("lin")
+    cal = session.calibration()
+    assert cal.x.log and not cal.y.log
+    # X axis: 1 at 100, 100 at 300 -> midpoint (200) reads 10.
+    # Y axis (linear): 1 at 100, 10 at 300 -> at 150 reads 3.25.
+    assert cal.xy(200, 150) == pytest.approx((10.0, 3.25))
+
+
+def test_zero_anchor_skips_mode_step():
+    """A zero anchor value makes log impossible, so the mode step must be
+    skipped automatically and the axis stays linear (no choice shown)."""
+    session = CalibrationSession()
+    session.record_point(100, 50)
+    session.record_value(0.0)
+    session.record_point(300, 50)
+    session.record_value(100.0)
+    assert not session.expecting_mode
+    assert session.prompt() == "Click the first Y point"
+    session.record_point(150, 100)
+    session.record_value(5.0)
+    session.record_point(150, 300)
+    session.record_value(5.0)
+    assert session.expecting_mode  # Y values are positive, so Y asks
+    session.record_mode("lin")
+    cal = session.calibration()
+    assert not cal.x.log and not cal.y.log
+
+
+def test_negative_anchor_skips_mode_step():
+    """A negative anchor makes log impossible, so that axis's mode step is
+    skipped (fixed to linear) and no log choice is offered."""
+    session = CalibrationSession()
+    session.record_point(100, 50)
+    session.record_value(-2.0)
+    session.record_point(300, 50)
+    session.record_value(100.0)
+    assert not session.expecting_mode
+    assert session.prompt() == "Click the first Y point"
+    session.record_point(150, 100)
+    session.record_value(1.0)
+    session.record_point(150, 300)
+    session.record_value(10.0)
+    session.record_mode("lin")
+    cal = session.calibration()
+    assert not cal.x.log and not cal.y.log
+
+
+def test_undo_removes_log_mode_back_to_linear():
+    """Undoing a mode choice must revert that axis to linear so the choice
+    can be made again."""
+    session = CalibrationSession()
+    _complete_x_log(session)
+    session.record_mode("log")
+    # Back up over the mode decision and re-present it.
+    session.undo()
+    assert session.expecting_mode
+    session.record_mode("lin")
+    assert session.prompt() == "Click the first Y point"

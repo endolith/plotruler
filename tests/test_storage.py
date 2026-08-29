@@ -103,3 +103,36 @@ def test_save_creates_parent_directory(tmp_path):
     path = os.path.join(tmp_path, "deeply", "nested", "settings.json")
     storage.save(path, geometry=[1, 2, 3, 4])
     assert os.path.exists(path)
+
+
+def test_log_flag_round_trips(tmp_path):
+    """The log flags must survive a save/load cycle, so a log-axis
+    calibration reads back as log after a restart."""
+    cal = Calibration(
+        AxisCalibration(100, 1, 300, 100, log=True),
+        AxisCalibration(100, 20, 400, 0, log=False),
+    )
+    path = os.path.join(tmp_path, "settings.json")
+    storage.save(path, calibration=cal)
+    restored = storage.calibration(path)
+    assert restored.x.log and not restored.y.log
+    assert restored.x.value(200) == cal.x.value(200)
+
+
+def test_missing_log_flag_defaults_to_linear(tmp_path):
+    """A config written before the log-axis feature has no log key; it
+    must load as linear rather than erroring."""
+    path = os.path.join(tmp_path, "settings.json")
+    storage.save(path, geometry=[0, 0, 100, 100])
+    data = storage.load(path)
+    data["calibration"] = {
+        "x": {"p1": 100, "v1": 0, "p2": 300, "v2": 10},
+        "y": {"p1": 100, "v1": 20, "p2": 400, "v2": 0},
+    }
+    import json
+
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle)
+    restored = storage.calibration(path)
+    assert restored is not None
+    assert not restored.x.log and not restored.y.log
