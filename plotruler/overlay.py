@@ -49,6 +49,12 @@ _EDGE = 8
 # rather than falling through to the graph underneath.
 _RESIZE_ZONE = 14
 
+# Calibration instruction block: gap from the window bottom to the first
+# prompt line, and the vertical space between stacked prompt lines. Shared
+# by painting and by the mode-button hit-test so they never drift.
+_INSTRUCTION_BOTTOM_GAP = 96
+_INSTRUCTION_ROW_H = 26
+
 # Anchor marker colors: X on one hue, Y on another, both chosen to read
 # against dark and light graph content.
 _X_COLOR = QColor(80, 200, 255)
@@ -806,17 +812,17 @@ class OverlayWindow(QWidget):
         """The y of the mode-button row during the linear/log choice.
 
         The prompt occupies the first row of the instruction block; the
-        buttons sit one 20px row below it (the value-input row is never
-        shown while a mode choice is pending, so the line count is fixed).
+        buttons sit one row below it (the value-input row is never shown
+        while a mode choice is pending, so the line count is fixed).
         """
-        return self.height() - 96 + 20
+        return self.height() - _INSTRUCTION_BOTTOM_GAP + _INSTRUCTION_ROW_H
 
     def _paint_instruction(self, painter):
         """Draw the calibration prompt and hints as floating translucent
         text at the bottom of the window, with no backing box."""
         left = _EDGE + 8
         width = self.width() - left * 2
-        top = self.height() - 96
+        top = self.height() - _INSTRUCTION_BOTTOM_GAP
         prompt = self._session.prompt()
         line = 0
         if self._session.active:
@@ -826,25 +832,27 @@ class OverlayWindow(QWidget):
         self._draw_outlined_text(
             painter,
             prompt,
-            QPointF(left, top + line * 20),
+            QPointF(left, top + line * _INSTRUCTION_ROW_H),
             title_color,
-            11,
+            14,
             bold=True,
         )
         line += 1
         if self._session.expecting_value:
-            self._draw_value_input(painter, left, top + line * 20, width)
+            self._draw_value_input(
+                painter, left, top + line * _INSTRUCTION_ROW_H, width
+            )
             line += 1
         if self._session.expecting_mode:
-            self._draw_mode_buttons(painter, top + line * 20)
+            self._draw_mode_buttons(painter, top + line * _INSTRUCTION_ROW_H)
             line += 1
         if self._value_error:
             self._draw_outlined_text(
                 painter,
                 self._value_error,
-                QPointF(left, top + line * 20),
+                QPointF(left, top + line * _INSTRUCTION_ROW_H),
                 QColor(255, 130, 130),
-                9,
+                10,
                 bold=False,
             )
             line += 1
@@ -857,9 +865,9 @@ class OverlayWindow(QWidget):
         self._draw_outlined_text(
             painter,
             hint_text,
-            QPointF(left + width - 220, top + line * 20),
+            QPointF(left + width - 220, top + line * _INSTRUCTION_ROW_H),
             QColor(210, 210, 210),
-            9,
+            10,
             bold=False,
         )
 
@@ -870,12 +878,12 @@ class OverlayWindow(QWidget):
             self._value_text or " ",
             QPointF(left, top),
             QColor(255, 255, 255),
-            11,
+            14,
             bold=True,
         )
         if self._caret_visible:
             font = QFont()
-            font.setPointSize(11)
+            font.setPointSize(14)
             font.setBold(True)
             painter.setFont(font)
             metrics = QFontMetricsF(font)
@@ -883,8 +891,8 @@ class OverlayWindow(QWidget):
             baseline = top + metrics.height() / 2
             painter.setPen(QPen(QColor(255, 255, 255, 220), 2))
             painter.drawLine(
-                QPointF(caret_x, baseline - 7),
-                QPointF(caret_x, baseline + 7),
+                QPointF(caret_x, baseline - 9),
+                QPointF(caret_x, baseline + 9),
             )
 
     def _draw_mode_buttons(self, painter, row_top):
@@ -925,7 +933,7 @@ class OverlayWindow(QWidget):
             label,
             QPointF(rect.center().x(), rect.center().y()),
             QColor(240, 240, 240),
-            10,
+            12,
             bold=True,
             centered=True,
         )
