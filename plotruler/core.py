@@ -53,7 +53,7 @@ class AxisCalibration:
         """
         if self.log:
             exponent = log10(self.v1) + (p - self.p1) * self._log_slope()
-            result = 10 ** exponent
+            result = 10**exponent
             if not isfinite(result):
                 raise ValueError("log value is out of range")
             return result
