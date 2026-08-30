@@ -40,7 +40,7 @@ The first time, press **Ctrl+N** to calibrate: click two points on the X axis an
 
 Calibration and readout use **absolute screen coordinates** (physical pixels), not coordinates relative to the overlay window. That is what keeps the calibration glued to the graph: you can drag or resize the overlay and the calibrated region stays put over the plot beneath it.
 
-Each axis is a line fit through two reference points — a screen pixel and its value. After you enter the second point on an axis, a **Linear / Log** choice appears; pick one for that axis, then move on to the next. If a point's value is zero or negative, a log scale is impossible, so that axis is automatically linear and the choice is skipped. The math is platform-agnostic; only the overlay shell differs per OS.
+Each axis is a line fit through two reference points — a screen pixel and its value. After you enter the second point on an axis, a **Linear / Log** choice appears; pick one for that axis, then move on to the next. (If a point's value is zero or negative, a log scale is impossible, so that axis is automatically linear and the choice is skipped.)
 
 ### Platform support
 
@@ -51,7 +51,7 @@ Each axis is a line fit through two reference points — a screen pixel and its 
 | Global hotkey | ✅ (Win+Alt+P) | ⏳ | ⏳ |
 | System tray | ✅ | ✅ | ⚠️ (DE-dependent) |
 
-**Wayland is not supported yet.** Wayland forbids absolute screen coordinates by design, so the overlay model cannot work there today without a window-relative rewrite. Use an X11 session on Linux. Longer-term the plan is to support Wayland as a *regular* (non-overlay) window: a normal window doesn't need absolute coordinates, so it works there, and it's a natural fit since PlotRuler already behaves like a normal window for Alt+Tab / Win+D. macOS is architecturally supported (Qt provides a native path) but no macOS build exists yet — treat that column as planned, not shipped.
+**Wayland is not supported yet.** Wayland forbids absolute screen coordinates by design, so the overlay model cannot work there today without a window-relative rewrite. Use an X11 session on Linux. Longer-term the plan is to support Wayland as a *regular* (non-overlay) window: a normal window doesn't need absolute coordinates, so it works there. macOS is architecturally supported (Qt provides a native path) but no macOS build exists yet — treat that column as planned, not shipped.
 
 ## Usage
 
@@ -89,15 +89,6 @@ python build/build.py
 ```
 
 This produces a single-file `dist/PlotRuler.exe` (~46 MB, bundles Qt and needs no Python install) — the artifact attached to a GitHub release.
-
-### Publish to PyPI
-
-PlotRuler ships as a PyPI wheel plus a Windows `.exe`. Publishing a Python release is scripted:
-
-```sh
-./build/publish_pypi.sh --check   # upload to TestPyPI and verify first
-./build/publish_pypi.sh           # then publish to PyPI
-```
 
 ## License
 
