@@ -261,6 +261,25 @@ class CalibrationSession:
         self._step += 1
         self._skip_auto_mode()
 
+    def nudge_point(self, dx, dy):
+        """Shift the most recently placed point by (dx, dy) physical pixels.
+
+        Valid only while a value is awaited for a point that was just
+        clicked, so the user can nudge an anchor along the axis before
+        typing its value. Returns False (and does nothing) otherwise.
+        """
+        if not self.active:
+            return False
+        kind, axis, index = self._STEPS[self._step]
+        if kind != "value":
+            return False
+        key = (axis, index)
+        if key not in self._points:
+            return False
+        px, py = self._points[key]
+        self._points[key] = (px + dx, py + dy)
+        return True
+
     def record_value(self, value):
         """Attach a numeric value to the point that was just clicked."""
         if not self.active:

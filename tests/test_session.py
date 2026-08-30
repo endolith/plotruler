@@ -280,3 +280,43 @@ def test_undo_removes_log_mode_back_to_linear():
     assert session.expecting_mode
     session.record_mode("lin")
     assert session.prompt() == "Click the first Y point"
+
+
+def test_nudge_point_while_awaiting_value():
+    """nudge_point must shift the just-placed point while a value is being
+    awaited, so a slightly-off click can be corrected before typing."""
+    session = CalibrationSession()
+    session.record_point(100, 50)
+    assert session.nudge_point(3, 0) is True
+    assert session.anchors()[0] == ("x", 0, 103, 50, None)
+    assert session.nudge_point(0, -2) is True
+    assert session.anchors()[0] == ("x", 0, 103, 48, None)
+
+
+def test_nudge_point_is_rejected_before_click():
+    """nudge_point must fail cleanly (not raise) before any point exists,
+    since there is nothing to shift."""
+    session = CalibrationSession()
+    assert session.nudge_point(1, 0) is False
+
+
+def test_nudge_point_is_rejected_after_value_typed():
+    """nudge_point must fail once the value has been typed (the step moved
+    on), since the point is then fixed; returns False, not an error."""
+    session = CalibrationSession()
+    session.record_point(100, 50)
+    session.record_value(4.0)
+    assert session.nudge_point(1, 1) is False
+
+
+def test_nudge_point_rejects_perpendicular_axis_motion():
+    """A point on the X axis must not move vertically, and vice versa, so
+    the anchor stays on its calibrated axis line. The overlay enforces this
+    per axis; the session accepts any delta the caller intends."""
+    session = CalibrationSession()
+    session.record_point(100, 50)
+    assert session.nudge_point(0, 5) is True  # session allows it; callers gate
+    session.record_value(1.0)
+    key = ("x", 0)
+    px, py = session._points[key]
+    assert (px, py) == (100, 55)

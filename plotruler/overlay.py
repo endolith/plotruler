@@ -154,6 +154,9 @@ class OverlayWindow(QWidget):
         self._format_timer.setInterval(900)
         self._format_timer.timeout.connect(self._clear_format_notice)
 
+        # Pixel step for arrow-key anchor nudging during calibration.
+        self._nudge_step = 1
+
         # Tracks the manual maximize state; the window itself stays in a
         # normal window state so nothing conflicts with native snapping.
         self._maximized = False
@@ -392,6 +395,22 @@ class OverlayWindow(QWidget):
             self._session_key(event)
             event.accept()
             return
+        # Readout mode: nothing is being calibrated. Arrow keys nudge the
+        # crosshair to an exact point, and Ctrl+C copies its coordinate,
+        # so a reading can be placed precisely without the mouse.
+        if self._calibration is not None:
+            if (
+                event.key() == Qt.Key.Key_C
+                and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            ):
+                self._copy_readout()
+                event.accept()
+                return
+            nudge = self._crosshair_nudge(event.key())
+            if nudge is not None:
+                self._nudge_crosshair(*nudge)
+                event.accept()
+                return
         if event.key() == Qt.Key.Key_Escape:
             self.minimize_to_tray()
             event.accept()
@@ -456,6 +475,15 @@ class OverlayWindow(QWidget):
             if self._session.expecting_value:
                 self._submit_value()
             return
+        # Arrow keys nudge the just-placed anchor, so an off-by-one click
+        # can be fine-tuned before its value is typed. Physical pixel
+        # nudges: one px per keypress. Left/right move along the current
+        # axis only, so an X anchor stops at the right place and a Y anchor
+        # at the right height. Only meaningful while awaiting a value.
+        nudge = self._arrow_nudge(event.key())
+        if nudge is not None and self._session.nudge_point(*nudge):
+            self.update()
+            return
         if self._session.expecting_value:
             text = event.text()
             if text and all(c in _VALID_CHARS for c in text):
@@ -463,6 +491,29 @@ class OverlayWindow(QWidget):
                     self._value_text += text
                     self._value_error = None
                     self.update()
+
+    def _arrow_nudge(self, key):
+        """Return the (dx, dy) pixel nudge for an arrow key, or None.
+
+        Only the axis being calibrated moves: an X anchor responds to
+        left/right, a Y anchor to up/down. Perpendicular arrows do nothing
+        rather than shift a marker off the guided line.
+        """
+        axis = self._session.current_axis
+        d = self._nudge_step
+        if axis == "x":
+            if key == Qt.Key.Key_Left:
+                return -d, 0
+            if key == Qt.Key.Key_Right:
+                return d, 0
+            return None
+        if axis == "y":
+            if key == Qt.Key.Key_Up:
+                return 0, -d
+            if key == Qt.Key.Key_Down:
+                return 0, d
+            return None
+        return None
 
     def _submit_value(self):
         """Commit the typed value to the current anchor point."""
@@ -546,6 +597,30 @@ class OverlayWindow(QWidget):
 
     def _clear_copy_notice(self):
         self._copy_notice = ""
+        self.update()
+
+    def _crosshair_nudge(self, key):
+        """Return the (dx, dy) pixel nudge for an arrow key, or None."""
+        d = self._nudge_step
+        if key == Qt.Key.Key_Left:
+            return -d, 0
+        if key == Qt.Key.Key_Right:
+            return d, 0
+        if key == Qt.Key.Key_Up:
+            return 0, -d
+        if key == Qt.Key.Key_Down:
+            return 0, d
+        return None
+
+    def _nudge_crosshair(self, dx, dy):
+        """Move the readout crosshair by (dx, dy) logical pixels.
+
+        The crosshair normally follows the mouse; once nudged it holds a
+        fixed offset from the cursor so a precise coordinate can be read and
+        copied. The readout recomputes from the new position.
+        """
+        self._hover_pos += QPoint(dx, dy)
+        self._hover_active = True
         self.update()
 
     def set_num_format(self, fmt):
@@ -929,7 +1004,8 @@ class OverlayWindow(QWidget):
         # bottom-aligned: prompt always, then the conditional rows.
         rows = 1
         if self._session.expecting_value:
-            rows += 1
+            rows += 1  # value input
+            rows += 1  # arrow-nudge note
         if self._session.expecting_mode:
             rows += 1
         if self._value_error:
@@ -956,6 +1032,21 @@ class OverlayWindow(QWidget):
         row_y = top + _INSTRUCTION_ROW_H
         if self._session.expecting_value:
             self._draw_value_input(painter, left, row_y, width)
+            row_y += _INSTRUCTION_ROW_H
+            # Offer the arrow-key nudge as a subtle hint under the input, so
+            # the user knows an off-by-one click can be fine-tuned first.
+            # Each anchor is a line along its axis, so only motions along
+            # that axis move it; perpendicular arrows do nothing.
+            axis = self._session.current_axis
+            direction = "left/right" if axis == "x" else "up/down"
+            self._draw_outlined_text(
+                painter,
+                f"{direction} arrows: nudge the line",
+                QPointF(left, row_y),
+                QColor(180, 180, 180),
+                _TEXT_SMALL,
+                bold=False,
+            )
             row_y += _INSTRUCTION_ROW_H
         if self._session.expecting_mode:
             self._draw_mode_buttons(painter, row_y)
@@ -992,6 +1083,9 @@ class OverlayWindow(QWidget):
             parts.append("Ctrl+N new")
         if self._session is None:
             parts.append("Esc hide")
+            if self._calibration is not None:
+                parts.append("arrows nudge")
+                parts.append("Ctrl+C copy")
         else:
             parts.append("Esc cancel")
         text = "  ·  ".join(parts) if parts else "Ctrl+N new"
