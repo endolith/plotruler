@@ -100,13 +100,25 @@ def test_qmodifiers_to_names_maps_meta_to_win():
 
 def test_registration_is_noop_off_windows():
     """register() must fail closed on non-Windows rather than calling the
-    missing ctypes.windll, so the hotkey is simply unavailable."""
-    assert hotkey.GlobalHotkey(hotkey.DEFAULT_COMBO).register() is False
+    missing ctypes.windll, so the hotkey is simply unavailable. On Windows
+    the hotkey registers (or returns True when already registered)."""
+    combo = hotkey.GlobalHotkey(hotkey.DEFAULT_COMBO)
+    try:
+        registered = combo.register()
+    finally:
+        combo.unregister()
+    if hotkey._IS_WINDOWS:
+        assert registered is True
+    else:
+        assert registered is False
 
 
 def test_native_event_filter_is_noop_off_windows():
     """The native filter must decline every event on non-Windows instead of
     dereferencing ctypes.windll, so an unrelated platform event cannot
-    crash the process."""
+    crash the process. On Windows the filter requires a real MSG pointer,
+    so this is only meaningful off-Windows."""
+    if hotkey._IS_WINDOWS:
+        return
     hk = hotkey.GlobalHotkey(hotkey.DEFAULT_COMBO)
     assert hk.nativeEventFilter(b"windows_generic_MSG", 0) == (False, 0)

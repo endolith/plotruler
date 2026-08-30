@@ -5,9 +5,19 @@ was `wintypes is None`, but ctypes.wintypes imports fine on Linux, so the
 frame calls would reach ctypes.windll and die with AttributeError. These
 tests pin the behavior: every Win32 entry point returns its no-op value
 without touching the window or ctypes.windll.
+
+The behavior under test only exists off Windows, so the whole module is
+skipped on Windows (where the shim is real, not a no-op).
 """
 
+import pytest
+
 from plotruler import win_hittest
+
+pytestmark = pytest.mark.skipif(
+    win_hittest._IS_WINDOWS,
+    reason="Win32 shim is active on Windows; no-op is off-Windows only",
+)
 
 
 def test_platform_gate_false_on_non_windows():
