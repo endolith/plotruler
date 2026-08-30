@@ -123,7 +123,14 @@ class OverlayWindow(QWidget):
         # overlay has no way to be brought back, so hiding is a dead end.
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
 
-        self.title_bar = TitleBar(self, show_close=not self._tray_available)
+        # On a no-tray system minimize would quit (no way to bring the
+        # overlay back), so show only a close button, not a misleading
+        # minimize. With a tray, show minimize + maximize as normal.
+        self.title_bar = TitleBar(
+            self,
+            show_close=not self._tray_available,
+            show_min=self._tray_available,
+        )
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
 
         # Calibration state. A session exists only while the user is

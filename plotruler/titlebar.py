@@ -27,7 +27,7 @@ _HOVER_BG = QColor(255, 255, 255, 36)
 class TitleBar(QWidget):
     """A translucent title strip painted on the overlay."""
 
-    def __init__(self, parent=None, show_close=False):
+    def __init__(self, parent=None, show_close=False, show_min=True):
         super().__init__(parent)
         self._min_rect = QRectF()
         self._max_rect = QRectF()
@@ -37,15 +37,19 @@ class TitleBar(QWidget):
         # On platforms with no system tray there is no way to summon the
         # overlay back after hiding, so hiding is a dead end; offer a real
         # close (quit) button instead. On Windows the tray is the natural
-        # close path and no button is drawn.
+        # close path and no close button is drawn.
         self.show_close = show_close
+        # Minimize only makes sense when there is a tray to minimize to:
+        # on a no-tray system minimize quits, which reads as a close, so
+        # hide the misleading minimize button and keep just close.
+        self.show_min = show_min
         self.setMouseTracking(True)
 
     def _layout(self):
         w = self.width()
         # Buttons are laid right to left. With a close button present it
         # takes the rightmost slot; otherwise minimize and maximize fill the
-        # two slots next to the edge, as on Windows.
+        # slots next to the edge, as on Windows.
         right = w
         if self.show_close:
             self._close_rect = QRectF(
@@ -55,9 +59,12 @@ class TitleBar(QWidget):
         self._max_rect = QRectF(
             right - _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
         )
-        self._min_rect = QRectF(
-            right - 2 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
-        )
+        if self.show_min:
+            self._min_rect = QRectF(
+                right - 2 * _BUTTON_WIDTH, 0, _BUTTON_WIDTH, self.height()
+            )
+        else:
+            self._min_rect = QRectF()
 
     def is_over_buttons(self, pos):
         """True when a window-coordinate point hits a control button."""
@@ -95,16 +102,20 @@ class TitleBar(QWidget):
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(QColor(235, 235, 235))
-        # Reserve room for the buttons on the right; three when a close
-        # button is shown, two otherwise.
-        button_span = _BUTTON_WIDTH * (3 if self.show_close else 2)
+        # Reserve room for the buttons on the right: minimize/maximize/close
+        # normally, but no minimize when it is hidden (no-tray system).
+        button_count = (
+            (1 if self.show_min else 0) + (1 if self.show_close else 0) + 1
+        )
+        button_span = _BUTTON_WIDTH * button_count
         painter.drawText(
             QRectF(10, 0, self.width() - button_span - 20, self.height()),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             "PlotRuler",
         )
 
-        self._draw_minimize(painter)
+        if self.show_min:
+            self._draw_minimize(painter)
         self._draw_maximize(painter)
         if self.show_close:
             self._draw_close(painter)
