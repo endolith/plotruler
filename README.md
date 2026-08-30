@@ -30,7 +30,7 @@ The first time, press **Ctrl+N** to calibrate: click two points on the X axis an
 ## Features
 
 - **Hover to read** — a crosshair and a live `(X, Y)` readout follow the cursor once calibrated.
-- **Click to copy** — a click copies the hovered coordinate and flashes confirmation.
+- **Click to copy** — a click copies the hovered coordinate (e.g. `12.5, 4.0`) and flashes confirmation.
 - **Number formats** — plain, scientific, engineering, E-notation, and SI prefixes; cycle with the number keys `1`–`6` or from the tray menu.
 - **Linear or log axes** — each axis is calibrated independently and can be linear or log scale.
 - **Persists** — calibration, window position, and number format survive restarts, so the overlay reopens already calibrated.

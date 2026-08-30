@@ -531,7 +531,7 @@ class OverlayWindow(QWidget):
             return
         x_str = self._calibration.x.format(vx, fmt=self._num_format)
         y_str = self._calibration.y.format(vy, fmt=self._num_format)
-        text = f"({x_str}, {y_str})"
+        text = f"{x_str}, {y_str}"
         QApplication.clipboard().setText(text)
         self._copy_notice = "Copied " + text
         self._copy_timer.start()
