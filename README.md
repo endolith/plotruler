@@ -49,7 +49,7 @@ the overlay reopens already calibrated.
 | Calibration survives window move/resize | ✅ | ✅ | ✅ |
 | Global hotkey (Win+Alt+P / Cmd+Alt+P) | ✅ RegisterHotKey | ⏳ | ⏳ deferred (XGrabKey) |
 | System tray | ✅ | ✅ | ⚠️ depends on DE |
-| Build/ship | .exe (PyInstaller) | ⏳ untested | editable install |
+| Build/ship | .exe (PyInstaller) | ⏳ untested | pip / PyPI wheel |
 
 **Wayland is not supported yet.** Wayland forbids absolute screen coordinates by
 design and GNOME refuses the workarounds, so the overlay model cannot work there
@@ -98,15 +98,39 @@ sudo pacman -S xcb-util-cursor
 Install and run (no frozen binary on Linux):
 
 ```sh
-./build/install_linux.sh    # or: pip install -e . then plotruler
+pip install plotruler       # or, from source: pip install -e . then plotruler
 plotruler
 ```
 
-> The installer checks for `libxcb-cursor` and fails fast with your distro's
-> package name if it is missing, since the app would otherwise abort at first
-> launch.
+> PyPI/wheels cannot install system libraries like `libxcb-cursor`; without it
+> the app aborts at first launch. Install it first (commands above). The
+> `build/install_linux.sh` helper also checks for it and fails fast with your
+> distro's package name.
 
-## Build a stand-alone executable (Windows)
+## Releases & publishing
+
+PlotRuler ships through **two channels**:
+
+| Channel | Artifact | Who uses it |
+|---|---|---|
+| **PyPI** (`pip install plotruler`) | wheel (`.whl`) | everyone, all platforms; the Linux and pip path |
+| **GitHub Releases** | `PlotRuler.exe` | Windows users who don't want pip |
+
+Publish a Python release to PyPI:
+
+```sh
+pip install build twine
+./build/publish_pypi.sh --check   # first: upload to TestPyPI and verify
+./build/publish_pypi.sh           # then: upload to PyPI
+```
+
+Requires `TWINE_USERNAME`/`TWINE_PASSWORD` (or a `~/.pypirc`), and an account
+with upload rights for the `plotruler` name. The package supports Python 3.10+
+(down to PySide6 6.11's own floor).
+
+The Windows `.exe` is separate and must be built on Windows.
+
+## Build a stand-alone Windows executable
 
 ```sh
 python -m pip install pyinstaller
@@ -115,7 +139,7 @@ python build/build.py
 
 Produces a single-file, windowed `dist/PlotRuler.exe` with a tray icon and
 version metadata. The app bundles Qt, so the exe is ~46 MB but needs no Python
-install to run.
+install to run. This is the artifact you attach to a GitHub release.
 
 See `AGENTS.md` for development conventions.
 
