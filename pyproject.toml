@@ -7,11 +7,37 @@ name = "plotruler"
 version = "0.1.3"
 description = "Read (X, Y) values off an on-screen graph with a translucent overlay"
 readme = "README.md"
-requires-python = ">=3.14"
-license = "MIT"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "endolith" }]
+maintainers = [{ name = "endolith" }]
+keywords = ["overlay", "graph", "plot", "digitize", "digitizer", "calibration", "readout"]
 dependencies = [
     "PySide6==6.11.2",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+[project.urls]
+Homepage = "https://github.com/endolith/plotruler"
+Repository = "https://github.com/endolith/plotruler"
+Issues = "https://github.com/endolith/plotruler/issues"
+Changelog = "https://github.com/endolith/plotruler/releases"
 
 [project.optional-dependencies]
 dev = [
@@ -23,7 +49,7 @@ dev = [
 packages = ["plotruler"]
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py310"
 line-length = 79
 
 [tool.ruff.format]

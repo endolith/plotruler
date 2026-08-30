@@ -25,7 +25,7 @@ import sys
 
 try:
     from ctypes import wintypes
-except ImportError, OSError:
+except (ImportError, OSError):
     wintypes = None
 
 from PySide6.QtCore import QPoint
@@ -237,7 +237,7 @@ def handle_native_event(window, event_type, message):
         return False, 0
     try:
         msg = wintypes.MSG.from_address(int(message))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return False, 0
     if msg.message == WM_NCHITTEST:
         local = _local_point(window, msg.lParam)

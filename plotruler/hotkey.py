@@ -17,7 +17,7 @@ import sys
 
 try:
     from ctypes import wintypes
-except ImportError, OSError:
+except (ImportError, OSError):
     wintypes = None
 
 from PySide6.QtCore import QAbstractNativeEventFilter
@@ -111,7 +111,7 @@ def combo_from_dict(data):
         modifiers = data["modifiers"]
         key_name = str(data["key"])
         vk = int(data["vk"])
-    except KeyError, TypeError, ValueError:
+    except (KeyError, TypeError, ValueError):
         return None
     clean = [name for name in modifiers if name in MOD_BY_NAME]
     if not clean or not key_name:
@@ -231,7 +231,7 @@ class GlobalHotkey(QAbstractNativeEventFilter):
             return False, 0
         try:
             msg = wintypes.MSG.from_address(int(message))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return False, 0
         if msg.message == WM_HOTKEY and msg.wParam == self._hotkey_id:
             if self._callback is not None:

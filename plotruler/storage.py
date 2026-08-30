@@ -66,7 +66,7 @@ def calibration_from_dict(data):
             data["y"]["v2"],
             log=bool(data["y"].get("log", False)),
         )
-    except KeyError, TypeError, ValueError:
+    except (KeyError, TypeError, ValueError):
         return None
     return Calibration(x, y)
 
@@ -76,7 +76,7 @@ def load(path):
     try:
         with open(path, encoding="utf-8") as handle:
             data = json.load(handle)
-    except OSError, ValueError:
+    except (OSError, ValueError):
         return {}
     if not isinstance(data, dict):
         return {}

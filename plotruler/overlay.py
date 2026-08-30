@@ -527,7 +527,7 @@ class OverlayWindow(QWidget):
         try:
             px, py = self._physical_from_local(self._hover_pos)
             vx, vy = self._calibration.xy(px, py)
-        except ValueError, ZeroDivisionError:
+        except (ValueError, ZeroDivisionError):
             return
         x_str = self._calibration.x.format(vx, fmt=self._num_format)
         y_str = self._calibration.y.format(vy, fmt=self._num_format)
@@ -1066,7 +1066,7 @@ class OverlayWindow(QWidget):
         px, py = self._physical_from_local(self._hover_pos)
         try:
             vx, vy = self._calibration.xy(px, py)
-        except ValueError, ZeroDivisionError:
+        except (ValueError, ZeroDivisionError):
             return
         x_text = self._calibration.x.format(vx, fmt=self._num_format)
         y_text = self._calibration.y.format(vy, fmt=self._num_format)
