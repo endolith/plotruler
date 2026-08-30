@@ -747,6 +747,12 @@ class OverlayWindow(QWidget):
             self._paint_readout(painter)
         if self._session is not None:
             self._paint_calibration(painter)
+        else:
+            # No calibration in progress: still show the keyboard hint so the
+            # user knows Ctrl+N can start one (only while focused).
+            self._paint_hint(
+                painter, self.height() - _INSTRUCTION_BOTTOM_MARGIN
+            )
 
     def _paint_calibration(self, painter):
         self._paint_anchors(painter)
@@ -937,19 +943,7 @@ class OverlayWindow(QWidget):
             _TEXT_LARGE,
             bold=True,
         )
-        hint_text = (
-            "Ctrl+Z undo  ·  Esc cancel"
-            if self._session.active
-            else "Ctrl+N redo  ·  Esc hide"
-        )
-        self._draw_outlined_text(
-            painter,
-            hint_text,
-            QPointF(left + width - 220, top),
-            QColor(235, 235, 235),
-            _TEXT_LARGE,
-            bold=True,
-        )
+        self._paint_hint(painter, top)
 
         # Interactive rows below the prompt, most recent nearest it.
         row_y = top + _INSTRUCTION_ROW_H
@@ -968,6 +962,42 @@ class OverlayWindow(QWidget):
                 _TEXT_MEDIUM,
                 bold=True,
             )
+
+    def _paint_hint(self, painter, row_top):
+        """Draw the keyboard-shortcut hint at the bottom-right of the window.
+
+        Shown only while the overlay is focused: the shortcuts (and their
+        reminders) only apply then. Ctrl+N works at any time, so it always
+        appears; Ctrl+Z (undo) only makes sense mid-calibration.
+
+        The hint shares the baseline of the prompt row so the calibration
+        block reads as one line; outside calibration it is drawn on its own
+        bottom row via _paint_idle_hint.
+        """
+        if not self.hasFocus():
+            return
+        parts = []
+        if self._session is not None and self._session.anchors():
+            # Ctrl+Z only has something to revert once at least one point
+            # has been clicked.
+            parts.append("Ctrl+Z undo")
+        if self._session is None or self._session.active:
+            parts.append("Ctrl+N new")
+        if self._session is None:
+            parts.append("Esc hide")
+        else:
+            parts.append("Esc cancel")
+        text = "  ·  ".join(parts) if parts else "Ctrl+N new"
+        self._draw_outlined_text(
+            painter,
+            text,
+            QPointF(
+                _EDGE + 8 + (self.width() - 2 * (_EDGE + 8)) - 220, row_top
+            ),
+            QColor(235, 235, 235),
+            _TEXT_LARGE,
+            bold=True,
+        )
 
     def _draw_value_input(self, painter, left, top, width):
         """Draw the typed value and a blinking caret on the input line."""
@@ -1133,3 +1163,15 @@ class OverlayWindow(QWidget):
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
         self._schedule_geometry_save()
         super().resizeEvent(event)
+
+    def focusInEvent(self, event):
+        # The keyboard-hint line only shows while the overlay is focused;
+        # repaint on focus so it appears and is correct.
+        self.update()
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        # Remove the keyboard hint when focus leaves; the shortcuts (and
+        # their on-screen reminders) only apply while focused.
+        self.update()
+        super().focusOutEvent(event)
