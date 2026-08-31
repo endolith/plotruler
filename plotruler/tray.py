@@ -124,6 +124,14 @@ class TrayIcon(QObject):
             self._format_menu.addAction(action)
         self._format_menu.aboutToShow.connect(self._sync_format_check)
 
+        # A non-interactive header at the top listing the name and version,
+        # so a user can tell which build they are running without an About
+        # dialog.
+        title_action = QAction(f"PlotRuler v{__version__}", self)
+        title_action.setEnabled(False)
+        self._menu.addAction(title_action)
+        self._menu.addSeparator()
+
         self._menu.addAction(self._toggle_action)
         self._menu.addSeparator()
         self._menu.addAction(self._new_action)
@@ -132,12 +140,6 @@ class TrayIcon(QObject):
         self._menu.addMenu(self._format_menu)
         self._menu.addSeparator()
         self._menu.addAction(self._quit_action)
-        self._menu.addSeparator()
-        # A non-interactive header listing the version, so it is visible on
-        # the menu without an extra About dialog.
-        version_action = QAction(f"PlotRuler v{__version__}", self)
-        version_action.setEnabled(False)
-        self._menu.addAction(version_action)
 
         self._tray.setContextMenu(self._menu)
         self._tray.setToolTip(f"PlotRuler v{__version__}")

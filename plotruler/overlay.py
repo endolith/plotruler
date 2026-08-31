@@ -1252,9 +1252,29 @@ class OverlayWindow(QWidget):
             bold=True,
         )
         # A small indicator showing the active number format and the number
-        # key that selects it, plus any transient format-change notice. This
-        # keeps the user aware of which format is shown since some formats
-        # (plain vs scientific for a rounded value) can look alike.
+        # key that selects it. This is pinned to the window's bottom-left
+        # corner (rather than following the crosshair) since some formats
+        # (plain vs scientific for a rounded value) can look alike and the
+        # user needs it in a fixed, findable spot. Only the transient
+        # format-change notice follows the cursor.
+        self._paint_format_indicator(painter)
+        if self._copy_notice:
+            self._draw_outlined_text(
+                painter,
+                self._copy_notice,
+                QPointF(x + 14, y + 64),
+                QColor(150, 235, 160),
+                _TEXT_SMALL,
+                bold=True,
+            )
+
+    def _paint_format_indicator(self, painter):
+        """Draw the number-format indicator pinned to the bottom-left corner.
+
+        When a format just changed (the transient notice is set) it is shown
+        here in place of the steady label, so the confirmation appears where
+        the user looks for the format rather than somewhere on the graph.
+        """
         info = self._format_notice or (
             "Format "
             + self._format_number(self._num_format)
@@ -1265,20 +1285,14 @@ class OverlayWindow(QWidget):
         self._draw_outlined_text(
             painter,
             info,
-            QPointF(x + 14, y + 40),
+            QPointF(
+                _EDGE + 8,
+                self.height() - _INSTRUCTION_BOTTOM_MARGIN - 12,
+            ),
             QColor(220, 220, 220),
             _TEXT_SMALL,
             bold=True,
         )
-        if self._copy_notice:
-            self._draw_outlined_text(
-                painter,
-                self._copy_notice,
-                QPointF(x + 14, y + 64),
-                QColor(150, 235, 160),
-                _TEXT_SMALL,
-                bold=True,
-            )
 
     def resizeEvent(self, event):
         self.title_bar.setGeometry(0, 0, self.width(), TITLEBAR_HEIGHT)
