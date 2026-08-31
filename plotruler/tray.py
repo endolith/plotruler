@@ -18,6 +18,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from . import __version__
 from .format import NAMES, OPTIONS
 
 # Accent colors matching the overlay so the tray icon feels consistent.
@@ -131,9 +132,15 @@ class TrayIcon(QObject):
         self._menu.addMenu(self._format_menu)
         self._menu.addSeparator()
         self._menu.addAction(self._quit_action)
+        self._menu.addSeparator()
+        # A non-interactive header listing the version, so it is visible on
+        # the menu without an extra About dialog.
+        version_action = QAction(f"PlotRuler v{__version__}", self)
+        version_action.setEnabled(False)
+        self._menu.addAction(version_action)
 
         self._tray.setContextMenu(self._menu)
-        self._tray.setToolTip("PlotRuler")
+        self._tray.setToolTip(f"PlotRuler v{__version__}")
         self._tray.activated.connect(self._on_activated)
         self._tray.show()
 
