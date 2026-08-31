@@ -831,9 +831,12 @@ class OverlayWindow(QWidget):
             self._paint_calibration(painter)
         else:
             # No calibration in progress: still show the keyboard hint so the
-            # user knows Ctrl+N can start one (only while focused).
+            # user knows Ctrl+N can start one (only while focused). Position
+            # its vertical center a small margin above the window bottom so
+            # the text is clearly inside the window, not flush with it.
             self._paint_hint(
-                painter, self.height() - _INSTRUCTION_BOTTOM_MARGIN
+                painter,
+                self.height() - _INSTRUCTION_BOTTOM_MARGIN - 12,
             )
 
     def _paint_calibration(self, painter):
@@ -909,7 +912,15 @@ class OverlayWindow(QWidget):
         )
 
     def _draw_outlined_text(
-        self, painter, text, pos, color, size, bold, centered=False
+        self,
+        painter,
+        text,
+        pos,
+        color,
+        size,
+        bold,
+        centered=False,
+        right_aligned=False,
     ):
         """Draw translucent text with a dark outline so it stays legible
         over any background without an opaque backing box.
@@ -917,8 +928,9 @@ class OverlayWindow(QWidget):
         The graph shows through the semi-transparent glyphs, but the dark
         halo keeps the text readable on light or dark content.
 
-        When centered is True the text is centered on pos.x() rather than
-        starting there, so it can be centered inside a button or label.
+        When centered is True the text is centered on pos.x(), and when
+        right_aligned is True its right edge sits at pos.x(); either way it
+        can be anchored inside a button or pinned to an edge.
         """
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -929,7 +941,11 @@ class OverlayWindow(QWidget):
         metrics = QFontMetricsF(font)
         height = metrics.height()
         baseline = pos.y() + height / 2
-        x = pos.x() - (metrics.horizontalAdvance(text) / 2 if centered else 0)
+        x = pos.x()
+        if centered:
+            x -= metrics.horizontalAdvance(text) / 2
+        elif right_aligned:
+            x -= metrics.horizontalAdvance(text)
         # Dark halo: draw the text offset in a ring around the glyph, then
         # the colored glyph on top. Offsets are symmetric on all four
         # sides so the outline reads evenly, not just left and right. This
@@ -1033,20 +1049,22 @@ class OverlayWindow(QWidget):
         if self._session.expecting_value:
             self._draw_value_input(painter, left, row_y, width)
             row_y += _INSTRUCTION_ROW_H
-            # Offer the arrow-key nudge as a subtle hint under the input, so
-            # the user knows an off-by-one click can be fine-tuned first.
-            # Each anchor is a line along its axis, so only motions along
-            # that axis move it; perpendicular arrows do nothing.
-            axis = self._session.current_axis
-            direction = "left/right" if axis == "x" else "up/down"
-            self._draw_outlined_text(
-                painter,
-                f"{direction} arrows: nudge the line",
-                QPointF(left, row_y),
-                QColor(180, 180, 180),
-                _TEXT_SMALL,
-                bold=False,
-            )
+            # Offer the arrow-key nudge as a hint under the input, so the
+            # user knows an off-by-one click can be fine-tuned first. Each
+            # anchor is a line along its axis, so only motions along that
+            # axis move it. Like all keyboard instructions it is hidden when
+            # the window is not focused.
+            if self.hasFocus():
+                axis = self._session.current_axis
+                direction = "left/right" if axis == "x" else "up/down"
+                self._draw_outlined_text(
+                    painter,
+                    f"{direction} arrows: nudge the line",
+                    QPointF(left, row_y),
+                    QColor(220, 220, 220),
+                    _TEXT_MEDIUM,
+                    bold=True,
+                )
             row_y += _INSTRUCTION_ROW_H
         if self._session.expecting_mode:
             self._draw_mode_buttons(painter, row_y)
@@ -1089,15 +1107,17 @@ class OverlayWindow(QWidget):
         else:
             parts.append("Esc cancel")
         text = "  ·  ".join(parts) if parts else "Ctrl+N new"
+        # Right-align the text so its right edge sits a small margin from
+        # the window's right edge, instead of a hard-coded offset that can
+        # drift off-window as the string grows.
         self._draw_outlined_text(
             painter,
             text,
-            QPointF(
-                _EDGE + 8 + (self.width() - 2 * (_EDGE + 8)) - 220, row_top
-            ),
+            QPointF(self.width() - (_EDGE + 8), row_top),
             QColor(235, 235, 235),
             _TEXT_LARGE,
             bold=True,
+            right_aligned=True,
         )
 
     def _draw_value_input(self, painter, left, top, width):
